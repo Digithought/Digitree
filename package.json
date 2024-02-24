@@ -1,0 +1,33 @@
+{
+  "name": "btree",
+  "version": "0.6.0",
+  "target": "module",
+  "description": "Lightweight B+Tree implementation in TypeScript",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "clean": "rm -rf dist/",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest ."
+  },
+  "keywords": [
+    "b-tree",
+    "btree",
+    "b+tree",
+		"sorted list",
+		"sorted dictionary",
+		"dictionary"
+  ],
+  "author": "Nathan T. Allan",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.19",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}
