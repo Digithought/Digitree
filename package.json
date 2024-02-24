@@ -1,6 +1,6 @@
 {
-  "name": "btree",
-  "version": "0.6.0",
+  "name": "digitree",
+  "version": "0.9.0",
   "target": "module",
   "description": "Lightweight B+Tree implementation in TypeScript",
   "main": "./dist/index.js",
@@ -12,6 +12,14 @@
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest ."
   },
+	"repository": {
+    "type": "git",
+    "url": "https://github.com/Digithought/Digitree.git"
+  },
+	"homepage": "https://github.com/Digithought/Digitree",
+	"bugs": {
+		"url": "https://github.com/Digithought/Digitree/issues"
+	},
   "keywords": [
     "b-tree",
     "btree",
