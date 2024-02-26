@@ -25,7 +25,7 @@ describe('Branching BTree', () => {
 		addRange(0, NodeCapacity + 1);
 		let i = 0;
 		for (let path of tree.range(new KeyRange(new KeyBound(0), new KeyBound(NodeCapacity)))) {
-			expect(tree.entryAt(path)).toBe(i);
+			expect(tree.at(path)).toBe(i);
 			++i;
 		}
 	});
@@ -35,7 +35,7 @@ describe('Branching BTree', () => {
 		addRange(0, NodeCapacity + 1);
 		let i = NodeCapacity;
 		for (let path of tree.range(new KeyRange(new KeyBound(NodeCapacity), new KeyBound(0), false))) {
-			expect(tree.entryAt(path)).toBe(i);
+			expect(tree.at(path)).toBe(i);
 			--i;
 		}
 	});
@@ -180,7 +180,7 @@ describe('Branching BTree', () => {
 		const s = Math.sign(count);
 		let i = starting;
 		for (let path of tree.range(new KeyRange(new KeyBound(starting), new KeyBound(starting + count + -s), s > 0))) {
-			expect(tree.entryAt(path)).toBe(i);
+			expect(tree.at(path)).toBe(i);
 			i += s;
 		}
 		expect(i).toBe(starting + count);

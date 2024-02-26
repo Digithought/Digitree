@@ -29,7 +29,7 @@ describe('Dictionary BTree', () => {
 		// Range scan
 		const values: Entry[] = [];
 		for (let path of tree.range(new KeyRange(new KeyBound(100), new KeyBound(200, false)))) {
-			values.push(tree.entryAt(path)!);
+			values.push(tree.at(path)!);
 		}
 		expect(values).toStrictEqual([...Array(100).keys()].map(i => ({ id: i + 100, value: (i + 100).toString() })));
 
@@ -63,7 +63,7 @@ describe('Dictionary BTree', () => {
 		const s = Math.sign(count);
 		let i = starting;
 		for (let path of tree.range(new KeyRange(new KeyBound(starting), new KeyBound(starting + count + -s), s > 0))) {
-			expect(tree.entryAt(path)).toStrictEqual({ id: i, value: i.toString() });
+			expect(tree.at(path)).toStrictEqual({ id: i, value: i.toString() });
 			i += s;
 		}
 		expect(i).toBe(starting + count);

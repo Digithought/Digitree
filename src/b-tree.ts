@@ -1,6 +1,7 @@
-import { BranchNode, ITreeNode, KeyRange, LeafNode, Path, PathBranch } from ".";
+import { KeyRange, Path, PathBranch } from ".";
+import { BranchNode, ITreeNode, LeafNode } from "./nodes";
 
-// Capacity not configurable - not worth the runtime memory, when almost nobody will touch this
+/** Node capacity.  Not configurable - not worth the runtime memory, when almost nobody will touch this */
 export const NodeCapacity = 64;
 
 /**
@@ -23,26 +24,25 @@ export class BTree<TKey, TEntry> {
 		this._root = new LeafNode([]);
 	}
 
-	/** @returns a path to the first entry (isMatch = false if no entries) */
+	/** @returns a path to the first entry (on = false if no entries) */
 	first(): Path<TKey, TEntry> {
 		return this.getFirst(this._root);
 	}
 
-	/** @returns a path to the last entry (isMatch = false if no entries) */
+	/** @returns a path to the last entry (on = false if no entries) */
 	last(): Path<TKey, TEntry> {
 		return this.getLast(this._root);
 	}
 
 	/** Attempts to find the given key
-	 * If isMatch is true on the resulting path, a match was found.  Use near() to try to move the path to the nearest match. */
+	 * If on is true on the resulting path, a match was found.  Use near() to try to move the path to the nearest match. */
 	find(key: TKey): Path<TKey, TEntry> {
 		return this.getPath(this._root, key);
 	}
 
 	/** Iterates based on the given range */
 	*range(range: KeyRange<TKey>): Generator<Path<TKey, TEntry>, void, void> {
-		if (range.first && range.last) {
-			// Ensure not inverted or empty range
+		if (range.first && range.last) { // Ensure not inverted or empty range
 			const comp = this.compareKeys(range.first.key, range.last.key);
 			if ((comp === 0 && (!range.first.inclusive || !range.last.inclusive))
 				|| comp === (range.isAscending ? 1 : -1)
@@ -53,6 +53,13 @@ export class BTree<TKey, TEntry> {
 		const startPath = range.first
 			? this.find(range.first.key)
 			: (range.isAscending ? this.first() : this.last());
+		if (!startPath.on) {	// If not directly on a key, move on to the nearest
+			if (range.isAscending) {
+				this.moveNext(startPath);
+			} else {
+				this.movePrior(startPath);
+			}
+		}
 		const iterable = range.isAscending
 			? this.ascending(startPath)
 			: this.descending(startPath);
@@ -63,86 +70,100 @@ export class BTree<TKey, TEntry> {
 		const endPath = range.last
 			? this.find(range.last.key)
 			: (range.isAscending ? this.last() : this.first());
-		for (let item of iter) {
-			if (item.isEqual(endPath)) {
+		if (!endPath.on) {	// If not directly on a key, move on to the nearest
+			if (range.isAscending) {
+				this.movePrior(endPath);
+			} else {
+				this.moveNext(endPath);
+			}
+		}
+		for (let path of iter) {
+			if (path.isEqual(endPath)) {
 				if (!range.last || range.last.inclusive) {
-					yield item;
+					yield path;
 				}
 				break;
 			}
-			yield item;
+			yield path;
 		}
 	}
 
 	/**
 	 * Adds a value to the tree.  Be sure to check the result, as the tree does not allow duplicate keys.
 	 * Added entries are frozen to ensure immutability
-	 * @returns true if the insert succeeded (there wasn't already an entry for the key); false otherwise. */
-	insert(entry: TEntry): boolean {
+	 * @returns path to the existing (on = true) or new (on = false) row. */
+	insert(entry: TEntry): Path<TKey, TEntry> {
 		Object.freeze(entry);	// Ensure immutability
 		const path = this.find(this.keyFromEntry(entry));
-		if (path.isMatch) {
-			return false;
+		if (path.on) {
+			return path;
 		}
 		this.insertAt(path, entry);
-		return true;
+		return path;
 	}
 
-	/** Updates the entry at the given path to the given value.
-	 * The isMatch property of the path will be cleared if the update causes the current path to no longer match the key.
-	 * @returns true if the update succeeded (the key was unchanged, or the new key wasn't a duplicate); false otherwise. */
-	updateAt(path: Path<TKey, TEntry>, newValue: TEntry) {
-		if (path.isMatch) {	// we can assume leafIndex is valid
+	/** Updates the entry at the given path to the given value.  Deletes and inserts if the key changes.
+	 * @returns path to resulting entry and whether it was an update (as opposed to an insert).
+	 * 	* on = true if update/insert succeeded.
+	 * 		* wasUpdate = true if updated; false if inserted.
+	 * 		* Returned path is on entry
+	 * 	* on = false if update/insert failed.
+	 * 		* wasUpdate = true, given path is not on an entry
+	 * 		* else newEntry's new key already present; returned path is "near" existing entry */
+	updateAt(path: Path<TKey, TEntry>, newEntry: TEntry): [path: Path<TKey, TEntry>, wasUpdate: boolean] {
+		if (path.on) {
 			const oldKey = this.keyFromEntry(path.leafNode.entries[path.leafIndex]);
-			if (this.compareKeys(oldKey, this.keyFromEntry(newValue)) !== 0) {	// if key changed, delete and re-insert
-				if (this.insert(newValue)) {
+			const newKey = this.keyFromEntry(newEntry);
+			if (this.compareKeys(oldKey, newKey) !== 0) {	// if key changed, delete and re-insert
+				let newPath = this.insert(newEntry)
+				newPath.on = !newPath.on;
+				if (newPath.on) {	// Didn't exists - insert succeeded
 					this.deleteAt(path);
-					return true;
+					newPath = this.find(newKey);	// Re-find the new path - delete might have completely changed the tree
 				}
-				path.isMatch = false;
-				return false;
+				return [newPath, false];
 			} else {
-				path.leafNode.entries[path.leafIndex] = Object.freeze(newValue);
+				path.leafNode.entries[path.leafIndex] = Object.freeze(newEntry);
 			}
-			return true;
 		}
-		return false;
+		return [path, true];
 	}
 
 	/** Inserts the entry if it doesn't exist, or updates it if it does.
 	 * The entry is frozen to ensure immutability.
-	 * @returns true if the value was inserted; false when updated */
-	upsert(entry: TEntry): boolean {
+	 * @returns path to the new entry.  on = true if existing; on = false if new. */
+	upsert(entry: TEntry): Path<TKey, TEntry> {
 		Object.freeze(entry);	// Ensure immutability
 		const path = this.find(this.keyFromEntry(entry));
-		if (path.isMatch) {
+		if (path.on) {
 			path.leafNode.entries[path.leafIndex] = entry;
-			return false;
 		} else {
 			this.insertAt(path, entry);
-			return true;
 		}
+		return path;
 	}
 
 	/** Inserts or updates depending on the existence of the given key, using callbacks to generate the new value.
-	 * @returns true if the value was inserted; false when updated */
-	insdate(key: TKey, getInserted: () => TEntry, getUpdated: (existing: TEntry) => TEntry): boolean {
-		const path = this.find(key);
-		if (path.isMatch) {
-			this.updateAt(path, Object.freeze(getUpdated(path.leafNode.entries[path.leafIndex])));
-			return false;
+	 * @returns path to new entry and whether an update or insert attempted.
+	 * If getUpdated callback returns a row that is already present, the resulting path will not be on. */
+	merge(newEntry: TEntry, getUpdated: (existing: TEntry) => TEntry): [path: Path<TKey, TEntry>, wasUpdate: boolean] {
+		const newKey = this.keyFromEntry(newEntry);
+		const path = this.find(newKey);
+		if (path.on) {
+			return this.updateAt(path, getUpdated(path.leafNode.entries[path.leafIndex]));
 		} else {
-			this.insertAt(path, Object.freeze(getInserted()));
-			return true;
+			this.insertAt(path, newEntry);
+			path.on = true;
+			return [path, false];
 		}
 	}
 
 	/** Deletes the entry at the given path.
-	 * The isMatch property of the path will be cleared.
+	 * The on property of the path will be cleared.
 	 * @returns true if the delete succeeded (the key was found); false otherwise.
 	*/
 	deleteAt(path: Path<TKey, TEntry>): boolean {
-		if (path.isMatch) {
+		if (path.on) {
 			path.leafNode.entries.splice(path.leafIndex, 1);
 			if (path.branches.length > 0) {   // Only wory about underflows, balancing, etc. if not root
 				if (path.leafIndex === 0) { // If we deleted index 0, update branches with new key
@@ -154,7 +175,7 @@ export class BTree<TKey, TEntry> {
 					this._root = newRoot;
 				}
 			}
-			path.isMatch = false;
+			path.on = false;
 			return true;
 		} else {
 			return false;
@@ -162,55 +183,67 @@ export class BTree<TKey, TEntry> {
 	}
 
 	/** @returns the entry for the given path if on an entry; undefined otherwise. */
-	entryAt(path: Path<TKey, TEntry>) {
-		return path.isMatch ? path.leafNode.entries[path.leafIndex] : undefined;
+	at(path: Path<TKey, TEntry>): TEntry | undefined {
+		return path.on ? path.leafNode.entries[path.leafIndex] : undefined;
 	}
 
 	/** Iterates forward starting from the path location (inclusive) to the end. */
 	*ascending(path: Path<TKey, TEntry>): Generator<Path<TKey, TEntry>, void, void> {
-		this.near(path);
-		while (path.isMatch) {
-			yield path;
-			this.next(path);
+		const newPath = path.clone();
+		while (newPath.on) {
+			yield newPath;
+			this.moveNext(newPath);
 		}
 	}
 
 	/** Iterates backward starting from the path location (inclusive) to the end. */
 	*descending(path: Path<TKey, TEntry>): Generator<Path<TKey, TEntry>, void, void> {
-		this.near(path);
-		while (path.isMatch) {
-			yield path;
-			this.prior(path);
+		const newPath = path.clone();
+		while (newPath.on) {
+			yield newPath;
+			this.movePrior(newPath);
 		}
 	}
 
-	/** Computed (not stored) count.  Computes the sum using leaf-node lengths.  O(n/af) where af is average fill. */
-	getCount(): number {
+	/** Computed (not stored) count.  Computes the sum using leaf-node lengths.  O(n/af) where af is average fill.
+	 * @param from if provided, the count will start from the given path (inclusive).  If ascending is false,
+	 * 	the count will start from the end of the tree.
+	 */
+	getCount(from?: { path: Path<TKey, TEntry>, ascending: boolean }): number {
 		let result = 0;
-		const path = this.first();
-		while (path.isMatch) {
-			result += path.leafNode.entries.length;
-			path.leafIndex = path.leafNode.entries.length - 1;
-			this.next(path);
+		const path = from ? from.path.clone() : this.first();
+		if (from?.ascending ?? true) {
+			while (path.on) {
+				result += path.leafNode.entries.length - path.leafIndex;
+				path.leafIndex = path.leafNode.entries.length - 1;
+				this.moveNext(path);
+			}
+		} else {
+			while (path.on) {
+				result += path.leafIndex + 1;
+				path.leafIndex = 0;
+				this.movePrior(path);
+			}
 		}
 		return result;
 	}
 
-	/** If the path isn't a match, but there is a "nearest" entry, this will place the path on it. */
-	near(path: Path<TKey, TEntry>) {
-		if (!path.isMatch) {
-			const success = path.branches.every(branch => branch.index >= 0 && branch.index < branch.node.nodes.length)
-				&& path.leafIndex >= 0 && path.leafIndex < path.leafNode.entries.length;
-			path.isMatch = success;
-			return success;
-		} else {
-			return true;
-		}
+	/** @returns a path one step forward.  on will be true if the path hasn't hit the end. */
+	next(path: Path<TKey, TEntry>): Path<TKey, TEntry> {
+		const newPath = path.clone();
+		this.moveNext(newPath);
+		return newPath;
 	}
 
-	/** Attempts to advance the path one step forward.  isMatch will be true if the path hasn't hit the end. */
-	next(path: Path<TKey, TEntry>) {
-		if (path.leafIndex >= path.leafNode.entries.length - 1) {
+	/** Attempts to advance the given path one step forward. (mutates the path) */
+	moveNext(path: Path<TKey, TEntry>) {
+		if (!path.on) {	// Attempt to move off of crack
+			path.on = path.branches.every(branch => branch.index >= 0 && branch.index < branch.node.nodes.length)
+				&& path.leafIndex >= 0 && path.leafIndex < path.leafNode.entries.length;
+			if (path.on) {
+				return;
+			}
+		} else if (path.leafIndex >= path.leafNode.entries.length - 1) {
 			let popCount = 0;
 			let opening = false;
 			const last = path.branches.length - 1;
@@ -223,8 +256,8 @@ export class BTree<TKey, TEntry> {
 			}
 
 			if (!opening) {
-				path.leafIndex = path.leafNode.entries.length - 1;
-				path.isMatch = false;
+				path.leafIndex = path.leafNode.entries.length;	// after last row = end crack
+				path.on = false;
 			} else {
 				path.branches.splice(-popCount, popCount);
 				const branch = path.branches.at(-1)!;
@@ -234,12 +267,19 @@ export class BTree<TKey, TEntry> {
 		}
 		else {
 			++path.leafIndex;
-			path.isMatch = true;
+			path.on = true;
 		}
 	}
 
-	/** Attempts to advance the path one step backward.  isMatch will be true if the path hasn't hit the end. */
-	prior(path: Path<TKey, TEntry>) {
+	/** @returns a path one step backward.  on will be true if the path hasn't hit the end. */
+	prior(path: Path<TKey, TEntry>): Path<TKey, TEntry> {
+		const newPath = path.clone();
+		this.movePrior(newPath);
+		return newPath;
+	}
+
+	/** Attempts to advance the given path one step backwards. (mutates the path) */
+	movePrior(path: Path<TKey, TEntry>) {
 		if (path.leafIndex <= 0) {
 			let popCount = 0;
 			let opening = false;
@@ -254,7 +294,7 @@ export class BTree<TKey, TEntry> {
 
 			if (!opening) {
 				path.leafIndex = 0;
-				path.isMatch = false;
+				path.on = false;
 			} else {
 				path.branches.splice(-popCount, popCount);
 				const branch = path.branches.at(-1)!;
@@ -264,7 +304,7 @@ export class BTree<TKey, TEntry> {
 		}
 		else {
 			--path.leafIndex;
-			path.isMatch = true;
+			path.on = true;
 		}
 	}
 
@@ -284,8 +324,8 @@ export class BTree<TKey, TEntry> {
 	private getPath(node: ITreeNode, key: TKey): Path<TKey, TEntry> {
 		if (node.isLeaf) {
 			const leaf = node as LeafNode<TEntry>;
-			const [isMatch, index] = this.indexOfEntry(leaf.entries, key);
-			return new Path<TKey, TEntry>([], leaf, index, isMatch);
+			const [on, index] = this.indexOfEntry(leaf.entries, key);
+			return new Path<TKey, TEntry>([], leaf, index, on);
 		} else {
 			const branch = node as BranchNode<TKey>;
 			const index = this.indexOfKey(branch.partitions, key);
@@ -295,7 +335,7 @@ export class BTree<TKey, TEntry> {
 		}
 	}
 
-	private indexOfEntry(entries: TEntry[], key: TKey): [isMatch: boolean, index: number] {
+	private indexOfEntry(entries: TEntry[], key: TKey): [on: boolean, index: number] {
 		let lo = 0;
 		let hi = entries.length - 1;
 		let split = 0;
@@ -348,7 +388,6 @@ export class BTree<TKey, TEntry> {
 			const newBranch = new BranchNode<TKey>([split.key], [this._root, split.right]);
 			this._root = newBranch;
 		}
-		path.isMatch = true;
 	}
 
 	/** Starting from the given node, recursively working down to the leaf, build onto the path based on the beginning-most entry. */
@@ -357,7 +396,7 @@ export class BTree<TKey, TEntry> {
 			const leaf = node as LeafNode<TEntry>;
 			path.leafNode = leaf;
 			path.leafIndex = 0;
-			path.isMatch = leaf.entries.length > 0;
+			path.on = leaf.entries.length > 0;
 		} else {
 			path.branches.push(new PathBranch(node as BranchNode<TKey>, 0));
 			this.moveToFirst((node as BranchNode<TKey>).nodes[0], path);
@@ -370,7 +409,7 @@ export class BTree<TKey, TEntry> {
 			const leaf = node as LeafNode<TEntry>;
 			const count = leaf.entries.length;
 			path.leafNode = leaf;
-			path.isMatch = count > 0;
+			path.on = count > 0;
 			path.leafIndex = count > 0 ? count - 1 : 0;
 		} else {
 			const branch = node as BranchNode<TKey>;

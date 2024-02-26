@@ -5,6 +5,7 @@ export class KeyBound<TKey> {
 	) {}
 }
 
+/** Used for range scans.  Omitting first or last implies the end of the tree. */
 export class KeyRange<TKey> {
 	constructor (
 			public first?: KeyBound<TKey>,

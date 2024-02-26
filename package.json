@@ -1,6 +1,6 @@
 {
   "name": "digitree",
-  "version": "0.9.2",
+  "version": "1.0.0",
   "target": "module",
   "description": "Lightweight B+Tree implementation in TypeScript",
   "main": "./dist/index.js",
@@ -9,25 +9,26 @@
   },
   "scripts": {
     "clean": "rm -rf dist/",
+    "doc": "npx typedoc -out docs src",
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest .",
-		"prepublish": "npm run build"
+    "prepublish": "npm run build && npm run doc"
   },
-	"repository": {
+  "repository": {
     "type": "git",
     "url": "https://github.com/Digithought/Digitree.git"
   },
-	"homepage": "https://github.com/Digithought/Digitree",
-	"bugs": {
-		"url": "https://github.com/Digithought/Digitree/issues"
-	},
+  "homepage": "https://github.com/Digithought/Digitree",
+  "bugs": {
+    "url": "https://github.com/Digithought/Digitree/issues"
+  },
   "keywords": [
     "b-tree",
     "btree",
     "b+tree",
-		"sorted list",
-		"sorted dictionary",
-		"dictionary"
+    "sorted list",
+    "sorted dictionary",
+    "dictionary"
   ],
   "author": "Nathan T. Allan",
   "license": "MIT",
@@ -37,6 +38,7 @@
     "jest": "^29.7.0",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
+    "typedoc": "^0.25.8",
     "typescript": "^5.3.3"
   }
 }

@@ -15,12 +15,14 @@ Features:
   * Implementation does ensure consistency of sorting function
 * Light weight, very little memory used, only important primitives
 * CRUD: `insert`, `updateAt`, `deleteAt`, `find`, `first`, `last`
-* `upsert` and callback-based `insdate` functions for efficient mutation
+* `upsert` and callback-based `merge` functions for efficient mutation
 * Enumerate `ascending` and `descending` from a starting point
 * Enumerate `range`, ascending or descending, with optional inclusive/exclusive end-points
-* Path navigation through `next` and `prior`
-* Find nearest, using `near` on an unsuccessful path
+* Path navigation through `next` and `prior` or `moveNext` and `movePrior`
+* Find nearest, using `next` on an unsuccessful path
 * `getCount`, total entry count - computed by summing leaf entries
+
+WARNING: this library freezes added entries to reduce the chance that keys are externally mutated, but this is not done transitively, so it is possible that an object based key can be mutated after adding, resulting in tree corruption.  Don't attempt to change a key value after it has been inserted.  Use updateAt, upsert, insdate, or deleteAt/insert to change the key value.
 
 [^1]: technically this is a hybrid B-Tree/B+Tree.  Data are stored in the leaves, but no leaf-level linked list is implemented, since that's largely for optimizing for minimal contention.
 
@@ -46,11 +48,11 @@ Via pnpm:
   const tree = new BTree<number, number>();
   tree.insert(3); tree.insert(1); tree.insert(2);
   for (let path of tree.ascending(tree.first())) {
-    console.log(tree.entryAt(path));
+    console.log(tree.at(path));
   }
-  const path = tree.find(1.5);
-  tree.near(path);
-  console.log(tree.entryAt(path)); // 2
+  const path = tree.find(1.5);  // result in "crack" between values
+  console.log(path.on); // false (not on entry)
+  console.log(tree.at(tree.next(path))); // 2
 ```
 
 #### As an ordered dictionary
@@ -64,10 +66,26 @@ Via pnpm:
   tree.insert({ id: 1, shape: "circle" });
   tree.insert({ id: 2, shape: "square" });
   for (let path of tree.ascending(tree.first())) {
-    console.log(tree.entryAt(path));
+    console.log(tree.at(path));
   }
-  console.log(tree.entryAt(tree.find(2)));
+  console.log(tree.at(tree.find(2)));
 ```
+
+#### See [Reference Documentation](docs/index.html)
+
+#### Paths
+
+Many methods take and return Path objects.  All paths should considered invalid after any mutation operation, besides those returned by the mutation operator.  None of the public methods will mutate the given path, except for `moveNext` and `movePrior`.  In general, don't hold on the path operations, they are intended to be short-lived.
+
+```ts
+  tree.updateAt(tree.last().prior(), 7);  // this is fine
+  
+  const path1 = tree.last();
+  const ninePath = tree.updateAt(tree.find(5), 9);
+  tree.updateAt(ninePath, 8);  // Fine, ninePath came from mutation
+  //tree.updateAt(path1, 7);  // DON'T USE path1 - invalid after mutation
+```
+
 ### Background
 
 At one point, a colleague and I set about finding the fastest possible data structure for in-memory storage of datasets, small and large.  We experimented in C++ with various highly optimized data structures.  We inserted, deleted, and read from millions of data rows in various benchmarks.  We figured that structures like AVL trees or red-black trees would be the fastest due to simple design, but in the end, a B+Tree implementation, not dissimilar in design to this one (though much faster in C++) was the clear winner.  For some tests, they were about the same, but the other structures had terrible worst cases, whereas the B+Tree was reliably and consistently fast for a variety of workloads.  In studying this further, we realized that just as disk operations like to be performed in blocks, the same is true for memory and processor caches.
@@ -82,7 +100,7 @@ The B+Tree variant further modifies the B-Tree structure by storing all data in 
 
 #### Performance
 
-The best-case and worst-case time complexities for search, insertion, and deletion operations in a B+Tree are all O(log n), where n is the number of elements in the tree. This efficiency is maintained regardless of the tree's size, making B+Trees particularly well-suited for systems that manage large amounts of data.
+The best-case and worst-case time complexities for search, insertion, and deletion operations in a B+Tree are all O(log n), where n is the number of elements in the tree. This efficiency is maintained regardless of the tree's size, making B+Trees particularly well-suited for systems that manage large amounts of data.  For small datasets, this implementation has barely more overhead than an array, and should perform comparably to an ordered array.
 
 ### Contributing
 
@@ -91,7 +109,8 @@ Bug fixes, architectural enhancements, and speed improvement suggestions are wel
 #### Help wanted
 
 * Benchmark suite
-* Make Paths so the user can't muck with them directly (immutable pattern?)
+* Better insulation of path's internals
+* Versioning to automatically invalidate paths
 
 #### Bug Fixes
 
