@@ -71,7 +71,7 @@ Via pnpm:
   console.log(tree.at(tree.find(2)));
 ```
 
-#### See [Reference Documentation](docs/index.html)
+#### See [Reference Documentation](https://digithought.github.io/Digitree/)
 
 #### Paths
 
