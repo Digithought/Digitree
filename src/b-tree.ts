@@ -91,14 +91,16 @@ export class BTree<TKey, TEntry> {
 	/**
 	 * Adds a value to the tree.  Be sure to check the result, as the tree does not allow duplicate keys.
 	 * Added entries are frozen to ensure immutability
-	 * @returns path to the existing (on = true) or new (on = false) row. */
+	 * @returns path to the new (on = true) or conflicting (on = false) row. */
 	insert(entry: TEntry): Path<TKey, TEntry> {
 		Object.freeze(entry);	// Ensure immutability
 		const path = this.find(this.keyFromEntry(entry));
 		if (path.on) {
+			path.on = false;
 			return path;
 		}
 		this.insertAt(path, entry);
+		path.on = true;
 		return path;
 	}
 
@@ -116,8 +118,7 @@ export class BTree<TKey, TEntry> {
 			const newKey = this.keyFromEntry(newEntry);
 			if (this.compareKeys(oldKey, newKey) !== 0) {	// if key changed, delete and re-insert
 				let newPath = this.insert(newEntry)
-				newPath.on = !newPath.on;
-				if (newPath.on) {	// Didn't exists - insert succeeded
+				if (newPath.on) {	// insert succeeded
 					this.deleteAt(path);
 					newPath = this.find(newKey);	// Re-find the new path - delete might have completely changed the tree
 				}
@@ -144,6 +145,8 @@ export class BTree<TKey, TEntry> {
 	}
 
 	/** Inserts or updates depending on the existence of the given key, using callbacks to generate the new value.
+	 * @param newEntry the new entry to insert if the key doesn't exist.
+	 * @param getUpdated a callback to generate an updated entry if the key does exist.  WARNING: don't mutate the tree in this callback.
 	 * @returns path to new entry and whether an update or insert attempted.
 	 * If getUpdated callback returns a row that is already present, the resulting path will not be on. */
 	merge(newEntry: TEntry, getUpdated: (existing: TEntry) => TEntry): [path: Path<TKey, TEntry>, wasUpdate: boolean] {

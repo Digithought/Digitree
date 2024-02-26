@@ -9,8 +9,8 @@ describe('One leaf, key-only, B+Tree', () => {
   });
 
 	it('should insert a single entry correctly', () => {
-		expect(tree.insert(5).on).toBe(false);
 		expect(tree.insert(5).on).toBe(true);
+		expect(tree.insert(5).on).toBe(false);
 		expect(tree.find(5).on).toBe(true);
 		expect(tree.find(4).on).toBe(false);
 	});

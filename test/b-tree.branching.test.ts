@@ -141,7 +141,7 @@ describe('Branching BTree', () => {
 	function addRange(starting: number, count: number) {
 		const s = Math.sign(count);
 		for (let i = 0; i !== count; i += s) {
-			if (!tree.insert(i + starting)) {	// Expects here is slow
+			if (!tree.insert(i + starting).on) {	// Expects here is slow
 				throw new Error("Failed to insert " + (i + starting));
 			}
 		}
@@ -151,7 +151,7 @@ describe('Branching BTree', () => {
 		const range = [...Array(end - start + 1).keys()];
 		while (range.length) {
 			const index = Math.floor(Math.random() * range.length);
-			if (!tree.insert(range.splice(index, 1)[0])) {
+			if (!tree.insert(range.splice(index, 1)[0]).on) {
 				throw new Error("Failed to insert " + index);
 			}
 		}

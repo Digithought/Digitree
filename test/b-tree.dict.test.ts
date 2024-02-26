@@ -43,7 +43,7 @@ describe('Dictionary BTree', () => {
 		while (range.length) {
 			const index = Math.floor(Math.random() * range.length);
 			const n = range.splice(index, 1)[0];
-			if (!tree.insert({ id: n, value: n.toString() })) {
+			if (!tree.insert({ id: n, value: n.toString() }).on) {
 				throw new Error("Failed to insert " + index);
 			}
 		}
