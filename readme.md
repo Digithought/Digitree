@@ -1,5 +1,6 @@
 # Digitree
-## Lightweight and performant B+Tree
+
+Lightweight and performant B+Tree.  [On GitHub](https://github.com/Digithought/Digitree)
 
 ### Overview
 
@@ -8,21 +9,21 @@ Welcome to Digitree, a fast in-memory B+Tree[^1], written in Typescript using ge
 This implementation takes two type arguments: `TKey` and `TEntry`.  The key must be obtainable from the entry, and a constructor callback extracts the key from an entry.  If TEntry and TKey are the same, the tree essentially acts like an ordered set.  To use the tree like a sorted dictionary, simply use an entry type like this: `{ key: 5, value: "five" }` with a callback like this: `e => e.key`.  Inserted entries are frozen to ensure that they don't mutate, and corrupt the tree.
 
 Features:
-* Operates like a set or dictionary
-* Can use existing object attribute as a key
-* Custom sorting
+* **Set or dictionary** behavior
+* **Existing attribute** can be used as a key (without additional storage)
+* **Custom sorting**
   * For performance, doesn't try to untangle idiosyncrasies of Ecmascript comparisons, but...
   * Implementation does ensure consistency of sorting function
-* Light weight, very little memory used, only important primitives
-* CRUD: `insert`, `updateAt`, `deleteAt`, `find`, `first`, `last`
-* `upsert` and callback-based `merge` functions for efficient mutation
-* Enumerate `ascending` and `descending` from a starting point
-* Enumerate `range`, ascending or descending, with optional inclusive/exclusive end-points
-* Path navigation through `next` and `prior` or `moveNext` and `movePrior`
-* Find nearest, using `next` on an unsuccessful path
-* `getCount`, total entry count - computed by summing leaf entries
+* **Light weight** - very little memory used, only important primitives
+* **CRUD**: `insert`, `updateAt`, `deleteAt`, `find`, `first`, `last`
+* **Upsert and Merge** for efficient hybrid mutation
+* **Enumerations** using `ascending` and `descending` from optional starting point
+* **Ranges** using `range`, ascending or descending, with optional inclusive/exclusive end-points
+* **Path** navigation through `next` and `prior` or `moveNext` and `movePrior`
+* **Find nearest**, using `next` on an unsuccessful path
+* **Count** using `getCount`, computed by summing leaf entries
 
-WARNING: this library freezes added entries to reduce the chance that keys are externally mutated, but this is not done transitively, so it is possible that an object based key can be mutated after adding, resulting in tree corruption.  Don't attempt to change a key value after it has been inserted.  Use updateAt, upsert, insdate, or deleteAt/insert to change the key value.
+WARNING: this library freezes added entries to reduce the chance that keys are externally mutated, but this is not done transitively, so it is possible that an object's key can be mutated after adding, resulting in tree corruption.  Don't attempt to change a key value after it has been inserted.  Use updateAt, upsert, insdate, or deleteAt/insert to change the key value.
 
 [^1]: technically this is a hybrid B-Tree/B+Tree.  Data are stored in the leaves, but no leaf-level linked list is implemented, since that's largely for optimizing for minimal contention.
 
@@ -75,7 +76,7 @@ Via pnpm:
 
 #### Paths
 
-Many methods take and return Path objects.  All paths should considered invalid after any mutation operation, besides those returned by the mutation operator.  None of the public methods will mutate the given path, except for `moveNext` and `movePrior`.  In general, don't hold on the path operations, they are intended to be short-lived.
+Many methods take and return Path objects.  All paths not returned from a mutation operation itself are invalid after mutation and any attempt to use them will throw an exception.  None of the public methods will mutate a given path, except for `moveNext` and `movePrior`.
 
 ```ts
   tree.updateAt(tree.last().prior(), 7);  // this is fine

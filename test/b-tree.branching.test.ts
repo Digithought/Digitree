@@ -1,5 +1,5 @@
-import { KeyBound, KeyRange, NodeCapacity } from '../src';
-import { BTree } from '../src/b-tree';
+import { KeyBound, KeyRange, NodeCapacity, BTree } from '../src';
+import { LeafNode } from '../src/nodes';
 
 describe('Branching BTree', () => {
   let tree: BTree<number, number>;
@@ -76,7 +76,7 @@ describe('Branching BTree', () => {
 		expectRange(0, halfCap - 1);
 		expectRange(gap + 1, halfCap);
 		expect(tree.getCount()).toBe(NodeCapacity - 1);
-		expect((tree as any)["_root"]["isLeaf"]).toBe(true);
+		expect((tree as any)["_root"] instanceof LeafNode).toBe(true);
 	});
 
 	it('should merge right', () => {
@@ -89,7 +89,7 @@ describe('Branching BTree', () => {
 		expectRange(0, halfCap);
 		expectRange(gap, halfCap - 1);
 		expect(tree.getCount()).toBe(NodeCapacity - 1);
-		expect((tree as any)["_root"]["isLeaf"]).toBe(true);
+		expect((tree as any)["_root"] instanceof LeafNode).toBe(true);
 	});
 
 	it('build a large tree - right', () => {

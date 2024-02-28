@@ -20,16 +20,18 @@ export class Path<TKey, TEntry> {
 			public branches: PathBranch<TKey>[],
 			public leafNode: LeafNode<TEntry>,
 			public leafIndex: number,
-			public on: boolean
+			public on: boolean,
+			public version: number,
 	) { }
 
 	isEqual(path: Path<TKey, TEntry>) {
 			return this.leafNode === path.leafNode
 					&& this.leafIndex === path.leafIndex
-					&& this.on === path.on;
+					&& this.on === path.on
+					&& this.version === path.version;
 	}
 
 	clone() {
-			return new Path(this.branches.map(b => b.clone()), this.leafNode, this.leafIndex, this.on);
+			return new Path(this.branches.map(b => b.clone()), this.leafNode, this.leafIndex, this.on, this.version);
 	}
 }

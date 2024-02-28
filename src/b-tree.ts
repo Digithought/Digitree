@@ -12,6 +12,7 @@ export const NodeCapacity = 64;
  */
 export class BTree<TKey, TEntry> {
 	private _root: ITreeNode;
+	private _version = 0;
 
 	/**
 	 * @param [compare=(a: TKey, b: TKey) => a < b ? -1 : a > b ? 1 : 0] a comparison function for keys.  The default uses < and > operators.
@@ -35,12 +36,15 @@ export class BTree<TKey, TEntry> {
 	}
 
 	/** Attempts to find the given key
-	 * If on is true on the resulting path, a match was found.  Use near() to try to move the path to the nearest match. */
+	 * @returns Path to the key or the "crack" before it.  If `on` is true on the resulting path, the key was found.
+	 * 	If `on` is false, next() and prior() can attempt to move to the nearest match. */
 	find(key: TKey): Path<TKey, TEntry> {
 		return this.getPath(this._root, key);
 	}
 
-	/** Iterates based on the given range */
+	/** Iterates based on the given range
+	 * WARNING: mutation during iteration will result in an exception
+	*/
 	*range(range: KeyRange<TKey>): Generator<Path<TKey, TEntry>, void, void> {
 		if (range.first && range.last) { // Ensure not inverted or empty range
 			const comp = this.compareKeys(range.first.key, range.last.key);
@@ -55,14 +59,14 @@ export class BTree<TKey, TEntry> {
 			: (range.isAscending ? this.first() : this.last());
 		if (!startPath.on) {	// If not directly on a key, move on to the nearest
 			if (range.isAscending) {
-				this.moveNext(startPath);
+				this.internalNext(startPath);
 			} else {
-				this.movePrior(startPath);
+				this.internalPrior(startPath);
 			}
 		}
 		const iterable = range.isAscending
-			? this.ascending(startPath)
-			: this.descending(startPath);
+			? this.internalAscending(startPath)
+			: this.internalDescending(startPath);
 		const iter = iterable[Symbol.iterator]();
 		if (range.first && !range.first.inclusive) {
 			iter.next();
@@ -72,9 +76,9 @@ export class BTree<TKey, TEntry> {
 			: (range.isAscending ? this.last() : this.first());
 		if (!endPath.on) {	// If not directly on a key, move on to the nearest
 			if (range.isAscending) {
-				this.movePrior(endPath);
+				this.internalPrior(endPath);
 			} else {
-				this.moveNext(endPath);
+				this.internalNext(endPath);
 			}
 		}
 		for (let path of iter) {
@@ -88,19 +92,21 @@ export class BTree<TKey, TEntry> {
 		}
 	}
 
+	/** @returns true if the given path remains valid; false if the tree has been mutated, invalidating the path. */
+	isValid(path: Path<TKey, TEntry>) {
+		return path.version === this._version;
+	}
+
 	/**
 	 * Adds a value to the tree.  Be sure to check the result, as the tree does not allow duplicate keys.
 	 * Added entries are frozen to ensure immutability
 	 * @returns path to the new (on = true) or conflicting (on = false) row. */
 	insert(entry: TEntry): Path<TKey, TEntry> {
 		Object.freeze(entry);	// Ensure immutability
-		const path = this.find(this.keyFromEntry(entry));
+		const path = this.internalInsert(entry);
 		if (path.on) {
-			path.on = false;
-			return path;
+			path.version = ++this._version;
 		}
-		this.insertAt(path, entry);
-		path.on = true;
 		return path;
 	}
 
@@ -113,50 +119,50 @@ export class BTree<TKey, TEntry> {
 	 * 		* wasUpdate = true, given path is not on an entry
 	 * 		* else newEntry's new key already present; returned path is "near" existing entry */
 	updateAt(path: Path<TKey, TEntry>, newEntry: TEntry): [path: Path<TKey, TEntry>, wasUpdate: boolean] {
+		this.validatePath(path);
 		if (path.on) {
-			const oldKey = this.keyFromEntry(path.leafNode.entries[path.leafIndex]);
-			const newKey = this.keyFromEntry(newEntry);
-			if (this.compareKeys(oldKey, newKey) !== 0) {	// if key changed, delete and re-insert
-				let newPath = this.insert(newEntry)
-				if (newPath.on) {	// insert succeeded
-					this.deleteAt(path);
-					newPath = this.find(newKey);	// Re-find the new path - delete might have completely changed the tree
-				}
-				return [newPath, false];
-			} else {
-				path.leafNode.entries[path.leafIndex] = Object.freeze(newEntry);
-			}
+			Object.freeze(newEntry);
 		}
-		return [path, true];
+		const result = this.internalUpdate(path, newEntry);
+		if (result[0].on) {
+			result[0].version = ++this._version;
+		}
+		return result;
 	}
 
 	/** Inserts the entry if it doesn't exist, or updates it if it does.
 	 * The entry is frozen to ensure immutability.
 	 * @returns path to the new entry.  on = true if existing; on = false if new. */
 	upsert(entry: TEntry): Path<TKey, TEntry> {
-		Object.freeze(entry);	// Ensure immutability
 		const path = this.find(this.keyFromEntry(entry));
+		Object.freeze(entry);
 		if (path.on) {
 			path.leafNode.entries[path.leafIndex] = entry;
 		} else {
-			this.insertAt(path, entry);
+			this.internalInsertAt(path, entry);
 		}
+		path.version = ++this._version;
 		return path;
 	}
 
 	/** Inserts or updates depending on the existence of the given key, using callbacks to generate the new value.
 	 * @param newEntry the new entry to insert if the key doesn't exist.
-	 * @param getUpdated a callback to generate an updated entry if the key does exist.  WARNING: don't mutate the tree in this callback.
+	 * @param getUpdated a callback to generate an updated entry if the key does exist.  WARNING: mutation in this callback will cause merge to error.
 	 * @returns path to new entry and whether an update or insert attempted.
 	 * If getUpdated callback returns a row that is already present, the resulting path will not be on. */
 	merge(newEntry: TEntry, getUpdated: (existing: TEntry) => TEntry): [path: Path<TKey, TEntry>, wasUpdate: boolean] {
 		const newKey = this.keyFromEntry(newEntry);
 		const path = this.find(newKey);
 		if (path.on) {
-			return this.updateAt(path, getUpdated(path.leafNode.entries[path.leafIndex]));
+			const result = this.updateAt(path, getUpdated(path.leafNode.entries[path.leafIndex]));	// Don't use internalUpdate - need to freeze and check for mutation
+			if (result[0].on) {
+				result[0].version = ++this._version;
+			}
+			return result;
 		} else {
-			this.insertAt(path, newEntry);
+			this.internalInsertAt(path, Object.freeze(newEntry));
 			path.on = true;
+			path.version = ++this._version;
 			return [path, false];
 		}
 	}
@@ -166,46 +172,34 @@ export class BTree<TKey, TEntry> {
 	 * @returns true if the delete succeeded (the key was found); false otherwise.
 	*/
 	deleteAt(path: Path<TKey, TEntry>): boolean {
-		if (path.on) {
-			path.leafNode.entries.splice(path.leafIndex, 1);
-			if (path.branches.length > 0) {   // Only wory about underflows, balancing, etc. if not root
-				if (path.leafIndex === 0) { // If we deleted index 0, update branches with new key
-					const pathBranch = path.branches.at(-1)!;
-					this.updatePartition(pathBranch.index, path, path.branches.length - 1, this.keyFromEntry(path.leafNode.entries[path.leafIndex]));
-				}
-				const newRoot = this.rebalanceLeaf(path, path.branches.length);
-				if (newRoot) {
-					this._root = newRoot;
-				}
-			}
-			path.on = false;
-			return true;
-		} else {
-			return false;
+		this.validatePath(path);
+		const result = this.internalDelete(path);
+		if (result) {
+			++this._version;
 		}
+		return result;
 	}
 
 	/** @returns the entry for the given path if on an entry; undefined otherwise. */
 	at(path: Path<TKey, TEntry>): TEntry | undefined {
+		this.validatePath(path);
 		return path.on ? path.leafNode.entries[path.leafIndex] : undefined;
 	}
 
-	/** Iterates forward starting from the path location (inclusive) to the end. */
-	*ascending(path: Path<TKey, TEntry>): Generator<Path<TKey, TEntry>, void, void> {
-		const newPath = path.clone();
-		while (newPath.on) {
-			yield newPath;
-			this.moveNext(newPath);
-		}
+	/** Iterates forward starting from the path location (inclusive) to the end.
+	 * WARNING: mutation during iteration will result in an exception.
+	*/
+	ascending(path: Path<TKey, TEntry>): IterableIterator<Path<TKey, TEntry>> {
+		this.validatePath(path);
+		return this.internalAscending(path);
 	}
 
-	/** Iterates backward starting from the path location (inclusive) to the end. */
-	*descending(path: Path<TKey, TEntry>): Generator<Path<TKey, TEntry>, void, void> {
-		const newPath = path.clone();
-		while (newPath.on) {
-			yield newPath;
-			this.movePrior(newPath);
-		}
+	/** Iterates backward starting from the path location (inclusive) to the end.
+	 * WARNING: mutation during iteration will result in an exception
+	*/
+	descending(path: Path<TKey, TEntry>): IterableIterator<Path<TKey, TEntry>> {
+		this.validatePath(path);
+		return this.internalDescending(path);
 	}
 
 	/** Computed (not stored) count.  Computes the sum using leaf-node lengths.  O(n/af) where af is average fill.
@@ -219,13 +213,13 @@ export class BTree<TKey, TEntry> {
 			while (path.on) {
 				result += path.leafNode.entries.length - path.leafIndex;
 				path.leafIndex = path.leafNode.entries.length - 1;
-				this.moveNext(path);
+				this.internalNext(path);
 			}
 		} else {
 			while (path.on) {
 				result += path.leafIndex + 1;
 				path.leafIndex = 0;
-				this.movePrior(path);
+				this.internalPrior(path);
 			}
 		}
 		return result;
@@ -240,38 +234,8 @@ export class BTree<TKey, TEntry> {
 
 	/** Attempts to advance the given path one step forward. (mutates the path) */
 	moveNext(path: Path<TKey, TEntry>) {
-		if (!path.on) {	// Attempt to move off of crack
-			path.on = path.branches.every(branch => branch.index >= 0 && branch.index < branch.node.nodes.length)
-				&& path.leafIndex >= 0 && path.leafIndex < path.leafNode.entries.length;
-			if (path.on) {
-				return;
-			}
-		} else if (path.leafIndex >= path.leafNode.entries.length - 1) {
-			let popCount = 0;
-			let opening = false;
-			const last = path.branches.length - 1;
-			while (popCount <= last && !opening) {
-				const branch = path.branches[last - popCount];
-				if (branch.index === branch.node.partitions.length)	// last node in branch
-					++popCount;
-				else
-					opening = true;
-			}
-
-			if (!opening) {
-				path.leafIndex = path.leafNode.entries.length;	// after last row = end crack
-				path.on = false;
-			} else {
-				path.branches.splice(-popCount, popCount);
-				const branch = path.branches.at(-1)!;
-				++branch.index;
-				this.moveToFirst(branch.node.nodes[branch.index], path);
-			}
-		}
-		else {
-			++path.leafIndex;
-			path.on = true;
-		}
+		this.validatePath(path);
+		this.internalNext(path);
 	}
 
 	/** @returns a path one step backward.  on will be true if the path hasn't hit the end. */
@@ -283,32 +247,8 @@ export class BTree<TKey, TEntry> {
 
 	/** Attempts to advance the given path one step backwards. (mutates the path) */
 	movePrior(path: Path<TKey, TEntry>) {
-		if (path.leafIndex <= 0) {
-			let popCount = 0;
-			let opening = false;
-			const last = path.branches.length - 1;
-			while (popCount <= last && !opening) {
-				const branch = path.branches[last - popCount];
-				if (branch.index === 0)	// first node in branch
-					++popCount;
-				else
-					opening = true;
-			}
-
-			if (!opening) {
-				path.leafIndex = 0;
-				path.on = false;
-			} else {
-				path.branches.splice(-popCount, popCount);
-				const branch = path.branches.at(-1)!;
-				--branch.index;
-				this.moveToLast(branch.node.nodes[branch.index], path);
-			}
-		}
-		else {
-			--path.leafIndex;
-			path.on = true;
-		}
+		this.validatePath(path);
+		this.internalPrior(path);
 	}
 
 	/**
@@ -324,11 +264,29 @@ export class BTree<TKey, TEntry> {
 		return result;
 	}
 
+	private *internalAscending(path: Path<TKey, TEntry>): IterableIterator<Path<TKey, TEntry>> {
+		this.validatePath(path);
+		const newPath = path.clone();
+		while (newPath.on) {
+			yield newPath;
+			this.moveNext(newPath);	// Not internal - re-check after yield
+		}
+	}
+
+	private *internalDescending(path: Path<TKey, TEntry>): IterableIterator<Path<TKey, TEntry>> {
+		this.validatePath(path);
+		const newPath = path.clone();
+		while (newPath.on) {
+			yield newPath;
+			this.movePrior(newPath);	// Not internal - re-check after yield
+		}
+	}
+
 	private getPath(node: ITreeNode, key: TKey): Path<TKey, TEntry> {
-		if (node.isLeaf) {
+		if (node instanceof LeafNode) {
 			const leaf = node as LeafNode<TEntry>;
 			const [on, index] = this.indexOfEntry(leaf.entries, key);
-			return new Path<TKey, TEntry>([], leaf, index, on);
+			return new Path<TKey, TEntry>([], leaf, index, on, this._version);
 		} else {
 			const branch = node as BranchNode<TKey>;
 			const index = this.indexOfKey(branch.partitions, key);
@@ -380,7 +338,121 @@ export class BTree<TKey, TEntry> {
 		return lo;
 	}
 
-	private insertAt(path: Path<TKey, TEntry>, entry: TEntry) {
+	internalNext(path: Path<TKey, TEntry>) {
+		if (!path.on) {	// Attempt to move off of crack
+			path.on = path.branches.every(branch => branch.index >= 0 && branch.index < branch.node.nodes.length)
+				&& path.leafIndex >= 0 && path.leafIndex < path.leafNode.entries.length;
+			if (path.on) {
+				return;
+			}
+		} else if (path.leafIndex >= path.leafNode.entries.length - 1) {
+			let popCount = 0;
+			let found = false;
+			const last = path.branches.length - 1;
+			while (popCount <= last && !found) {
+				const branch = path.branches[last - popCount];
+				if (branch.index === branch.node.partitions.length)	// last node in branch
+					++popCount;
+				else
+					found = true;
+			}
+
+			if (!found) {
+				path.leafIndex = path.leafNode.entries.length;	// after last row = end crack
+				path.on = false;
+			} else {
+				path.branches.splice(-popCount, popCount);
+				const branch = path.branches.at(-1)!;
+				++branch.index;
+				this.moveToFirst(branch.node.nodes[branch.index], path);
+			}
+		}
+		else {
+			++path.leafIndex;
+			path.on = true;
+		}
+	}
+
+	internalPrior(path: Path<TKey, TEntry>) {
+		this.validatePath(path);
+		if (path.leafIndex <= 0) {
+			let popCount = 0;
+			let opening = false;
+			const last = path.branches.length - 1;
+			while (popCount <= last && !opening) {
+				const branch = path.branches[last - popCount];
+				if (branch.index === 0)	// first node in branch
+					++popCount;
+				else
+					opening = true;
+			}
+
+			if (!opening) {
+				path.leafIndex = 0;
+				path.on = false;
+			} else {
+				path.branches.splice(-popCount, popCount);
+				const branch = path.branches.at(-1)!;
+				--branch.index;
+				this.moveToLast(branch.node.nodes[branch.index], path);
+			}
+		}
+		else {
+			--path.leafIndex;
+			path.on = true;
+		}
+	}
+
+	private internalUpdate(path: Path<TKey, TEntry>, newEntry: TEntry): [path: Path<TKey, TEntry>, wasUpdate: boolean] {
+		if (path.on) {
+			const oldKey = this.keyFromEntry(path.leafNode.entries[path.leafIndex]);
+			const newKey = this.keyFromEntry(newEntry);
+			if (this.compareKeys(oldKey, newKey) !== 0) {	// if key changed, delete and re-insert
+				let newPath = this.internalInsert(newEntry)
+				if (newPath.on) {	// insert succeeded
+					this.internalDelete(this.find(oldKey));	// Re-find - insert invalidated path
+					newPath = this.find(newKey);	// Re-find- delete invalidated path
+				}
+				return [newPath, false];
+			} else {
+				path.leafNode.entries[path.leafIndex] = newEntry;
+			}
+		}
+		return [path, true];
+	}
+
+	private internalDelete(path: Path<TKey, TEntry>): boolean {
+		if (path.on) {
+			path.leafNode.entries.splice(path.leafIndex, 1);
+			if (path.branches.length > 0) {   // Only wory about underflows, balancing, etc. if not root
+				if (path.leafIndex === 0) { // If we deleted index 0, update branches with new key
+					const pathBranch = path.branches.at(-1)!;
+					this.updatePartition(pathBranch.index, path, path.branches.length - 1, this.keyFromEntry(path.leafNode.entries[path.leafIndex]));
+				}
+				const newRoot = this.rebalanceLeaf(path, path.branches.length);
+				if (newRoot) {
+					this._root = newRoot;
+				}
+			}
+			path.on = false;
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	private internalInsert(entry: TEntry): Path<TKey, TEntry> {
+		const path = this.find(this.keyFromEntry(entry));
+		if (path.on) {
+			path.on = false;
+			return path;
+		}
+		this.internalInsertAt(path, entry);
+		path.on = true;
+		return path;
+	}
+
+	private internalInsertAt(path: Path<TKey, TEntry>, entry: TEntry) {
 		let split = this.leafInsert(path.leafNode, path.leafIndex, entry);
 		let branchIndex = path.branches.length - 1;
 		while (split && branchIndex >= 0) {
@@ -395,7 +467,7 @@ export class BTree<TKey, TEntry> {
 
 	/** Starting from the given node, recursively working down to the leaf, build onto the path based on the beginning-most entry. */
 	private moveToFirst(node: ITreeNode, path: Path<TKey, TEntry>) {
-		if (node.isLeaf) {
+		if (node instanceof LeafNode) {
 			const leaf = node as LeafNode<TEntry>;
 			path.leafNode = leaf;
 			path.leafIndex = 0;
@@ -408,7 +480,7 @@ export class BTree<TKey, TEntry> {
 
 	/** Starting from the given node, recursively working down to the leaf, build onto the path based on the end-most entry. */
 	private moveToLast(node: ITreeNode, path: Path<TKey, TEntry>) {
-		if (node.isLeaf) {
+		if (node instanceof LeafNode) {
 			const leaf = node as LeafNode<TEntry>;
 			const count = leaf.entries.length;
 			path.leafNode = leaf;
@@ -424,9 +496,9 @@ export class BTree<TKey, TEntry> {
 
 	/** Construct a path based on the first-most edge of the given. */
 	private getFirst(node: ITreeNode): Path<TKey, TEntry> {
-		if (node.isLeaf) {
+		if (node instanceof LeafNode) {
 			const leaf = node as LeafNode<TEntry>;
-			return new Path<TKey, TEntry>([], leaf, 0, leaf.entries.length > 0)
+			return new Path<TKey, TEntry>([], leaf, 0, leaf.entries.length > 0, this._version)
 		} else {
 			const branch = node as BranchNode<TKey>;
 			const path = this.getFirst(branch.nodes[0]);
@@ -437,10 +509,10 @@ export class BTree<TKey, TEntry> {
 
 	/** Construct a path based on the last-most edge of the given node */
 	private getLast(node: ITreeNode): Path<TKey, TEntry> {
-		if (node.isLeaf) {
+		if (node instanceof LeafNode) {
 			const leaf = node as LeafNode<TEntry>;
 			const count = leaf.entries.length;
-			return new Path<TKey, TEntry>([], leaf, count > 0 ? count - 1 : 0, count > 0);
+			return new Path<TKey, TEntry>([], leaf, count > 0 ? count - 1 : 0, count > 0, this._version);
 		} else {
 			const branch = node as BranchNode<TKey>;
 			const index = branch.partitions.length - 1;
@@ -505,7 +577,7 @@ export class BTree<TKey, TEntry> {
 	}
 
 	private firstKeyOfNode(node: ITreeNode): TKey {
-		if (node.isLeaf) {
+		if (node instanceof LeafNode) {
 			return this.keyFromEntry((node as LeafNode<TEntry>).entries[0]!);
 		} else {
 			return this.firstKeyOfNode((node as BranchNode<TKey>).nodes[0]);
@@ -524,7 +596,8 @@ export class BTree<TKey, TEntry> {
 
 		const rightSib = pIndex < pNode.nodes.length ? pNode.nodes[pIndex + 1] as LeafNode<TEntry> : undefined;
 		if (rightSib && rightSib.entries.length > (NodeCapacity >> 1)) {   // Attempt to borrow from right sibling
-			leaf.entries.push(rightSib.entries.shift()!);
+			const entry = rightSib.entries.shift()!;
+			leaf.entries.push(entry);
 			this.updatePartition(pIndex + 1, path, depth - 1, this.keyFromEntry(rightSib.entries[0]!));
 			return undefined;
 		}
@@ -626,6 +699,12 @@ export class BTree<TKey, TEntry> {
 			pathBranch.node.partitions[nodeIndex - 1] = newKey;
 		} else if (depth !== 0) {
 			this.updatePartition(path.branches[depth - 1].index, path, depth - 1, newKey);
+		}
+	}
+
+	private validatePath(path: Path<TKey, TEntry>) {
+		if (!this.isValid(path)) {
+			throw new Error("Path is invalid due to mutation of the tree");
 		}
 	}
 }
