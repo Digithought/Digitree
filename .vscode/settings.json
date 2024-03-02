@@ -2,7 +2,6 @@
     "cmake.configureOnOpen": false,
     "cSpell.words": [
         "digitree",
-        "insdate",
         "rebalance",
         "upsert"
     ]

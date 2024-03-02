@@ -42,6 +42,19 @@ export class BTree<TKey, TEntry> {
 		return this.getPath(this._root, key);
 	}
 
+	/** Retrieves the entry for the given key.
+	 * Use find instead for a path to the key, the nearest match, or as a basis for navigation.
+	 * @returns the entry for the given key if found; undefined otherwise. */
+	get(key: TKey): TEntry | undefined {
+		return this.at(this.find(key));
+	}
+
+	/** @returns the entry for the given path if on an entry; undefined otherwise. */
+	at(path: Path<TKey, TEntry>): TEntry | undefined {
+		this.validatePath(path);
+		return path.on ? path.leafNode.entries[path.leafIndex] : undefined;
+	}
+
 	/** Iterates based on the given range
 	 * WARNING: mutation during iteration will result in an exception
 	*/
@@ -180,12 +193,6 @@ export class BTree<TKey, TEntry> {
 		return result;
 	}
 
-	/** @returns the entry for the given path if on an entry; undefined otherwise. */
-	at(path: Path<TKey, TEntry>): TEntry | undefined {
-		this.validatePath(path);
-		return path.on ? path.leafNode.entries[path.leafIndex] : undefined;
-	}
-
 	/** Iterates forward starting from the path location (inclusive) to the end.
 	 * WARNING: mutation during iteration will result in an exception.
 	*/
@@ -303,7 +310,7 @@ export class BTree<TKey, TEntry> {
 		let result = -1;
 
 		while (lo <= hi) {
-			split = (lo + hi) >> 1;
+			split = (lo + hi) >>> 1;
 			result = this.compareKeys(key, this.keyFromEntry(entries[split]));
 
 			if (result === 0)
@@ -324,7 +331,7 @@ export class BTree<TKey, TEntry> {
 		let result = -1;
 
 		while (lo <= hi) {
-			split = (lo + hi) >> 1;
+			split = (lo + hi) >>> 1;
 			result = this.compareKeys(key, keys[split]);
 
 			if (result === 0)
@@ -529,7 +536,7 @@ export class BTree<TKey, TEntry> {
 		}
 		// Full. Split needed
 
-		const midIndex = (leaf.entries.length + 1) >> 1;
+		const midIndex = (leaf.entries.length + 1) >>> 1;
 		const moveEntries = leaf.entries.splice(midIndex);
 
 		// New node
@@ -555,7 +562,7 @@ export class BTree<TKey, TEntry> {
 		}
 		// Full. Split needed
 
-		const midIndex = (node.nodes.length + 1) >> 1;
+		const midIndex = (node.nodes.length + 1) >>> 1;
 		const movePartitions = node.partitions.splice(midIndex);
 		node.partitions.pop();	// Remove the extra partition
 		const moveNodes = node.nodes.splice(midIndex);
@@ -585,7 +592,7 @@ export class BTree<TKey, TEntry> {
 	}
 
 	private rebalanceLeaf(path: Path<TKey, TEntry>, depth: number): ITreeNode | undefined {
-		if (depth === 0 || path.leafNode.entries.length >= (NodeCapacity >> 1)) {
+		if (depth === 0 || path.leafNode.entries.length >= (NodeCapacity >>> 1)) {
 			return undefined;
 		}
 
@@ -595,7 +602,7 @@ export class BTree<TKey, TEntry> {
 		const pNode = parent.node;
 
 		const rightSib = pIndex < pNode.nodes.length ? pNode.nodes[pIndex + 1] as LeafNode<TEntry> : undefined;
-		if (rightSib && rightSib.entries.length > (NodeCapacity >> 1)) {   // Attempt to borrow from right sibling
+		if (rightSib && rightSib.entries.length > (NodeCapacity >>> 1)) {   // Attempt to borrow from right sibling
 			const entry = rightSib.entries.shift()!;
 			leaf.entries.push(entry);
 			this.updatePartition(pIndex + 1, path, depth - 1, this.keyFromEntry(rightSib.entries[0]!));
@@ -603,7 +610,7 @@ export class BTree<TKey, TEntry> {
 		}
 
 		const leftSib = pIndex > 0 ? pNode.nodes[pIndex - 1] as LeafNode<TEntry> : undefined;
-		if (leftSib && leftSib.entries.length > (NodeCapacity >> 1)) {   // Attempt to borrow from left sibling
+		if (leftSib && leftSib.entries.length > (NodeCapacity >>> 1)) {   // Attempt to borrow from left sibling
 			const entry = leftSib.entries.pop()!;
 			leaf.entries.unshift(entry);
 			this.updatePartition(pIndex, path, depth - 1, this.keyFromEntry(entry));
@@ -648,7 +655,7 @@ export class BTree<TKey, TEntry> {
 		const pNode = parent.node;
 
 		const rightSib = pIndex < pNode.nodes.length ? (pNode.nodes[pIndex + 1]) as BranchNode<TKey> : undefined;
-		if (rightSib && rightSib.nodes.length > (NodeCapacity >> 1)) {   // Attempt to borrow from right sibling
+		if (rightSib && rightSib.nodes.length > (NodeCapacity >>> 1)) {   // Attempt to borrow from right sibling
 			branch.partitions.push(pNode.partitions[pIndex]);
 			const node = rightSib.nodes.shift()!;
 			branch.nodes.push(node);
@@ -658,7 +665,7 @@ export class BTree<TKey, TEntry> {
 		}
 
 		const leftSib = pIndex > 0 ? (pNode.nodes[pIndex - 1] as BranchNode<TKey>) : undefined;
-		if (leftSib && leftSib.nodes.length > (NodeCapacity >> 1)) {   // Attempt to borrow from left sibling
+		if (leftSib && leftSib.nodes.length > (NodeCapacity >>> 1)) {   // Attempt to borrow from left sibling
 			branch.partitions.unshift(pNode.partitions[pIndex - 1]);
 			const node = leftSib.nodes.pop()!;
 			branch.nodes.unshift(node);

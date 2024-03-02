@@ -69,7 +69,7 @@ Via pnpm:
   for (let path of tree.ascending(tree.first())) {
     console.log(tree.at(path));
   }
-  console.log(tree.at(tree.find(2)));
+  console.log(tree.get(2));  // Equivalent to find then at
 ```
 
 #### See [Reference Documentation](https://digithought.github.io/Digitree/)
@@ -111,11 +111,12 @@ Bug fixes, architectural enhancements, and speed improvement suggestions are wel
 
 * Benchmark suite
 * Better insulation of path's internals
-* Versioning to automatically invalidate paths
+* More tests
+* AssemblyScript portability?
 
 #### Bug Fixes
 
-The best way to contribute a bug fix is to submit a Pull Request with the fix, as well as a unit test that only passes with the fix.
+The best way to contribute a bug fix is to submit a Pull Request with the fix, as well as a unit test that only passes with the fix.  Second best is to submit just a unit test that is broken.  If either of those are too tall an order, submit an issue.
 
 #### Performance Improvements
 
