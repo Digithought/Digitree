@@ -138,6 +138,28 @@ describe('Branching BTree', () => {
 		expect(tree.getCount()).toBe(0);
 	});
 
+	it('getCount should give the correct number, whether ascending or descending, with a starting path, or not', () => {
+		const count = NodeCapacity * NodeCapacity + 1;
+		addRange(0, count);
+		expect(tree.getCount()).toBe(count);
+		expect(tree.getCount({ path: tree.find(count >>> 1), ascending: false })).toBe(count - (count >>> 1));
+		expect(tree.getCount({ path: tree.find(count >>> 1) })).toBe(count - (count >>> 1));
+	});
+
+	it('ascending and descending should work over large trees', () => {
+		const count = NodeCapacity * NodeCapacity + 1;
+		addRange(0, count);
+		let i = 0;
+		for (const {} of tree.ascending(tree.first())) {
+			++i;
+		}
+		expect(i).toBe(count);
+		for (const {} of tree.descending(tree.last())) {
+			--i;
+		}
+		expect(i).toBe(0);
+	});
+
 	function addRange(starting: number, count: number) {
 		const s = Math.sign(count);
 		for (let i = 0; i !== count; i += s) {

@@ -33,6 +33,8 @@ describe('One leaf, key-only, B+Tree', () => {
 		expect(tree.at(tree.first())).toBe(1);
 		expect(tree.at(tree.last())).toBe(3);
 		expect(tree.at(tree.find(2))).toBe(2);
+		expect(tree.get(2)).toBe(2);
+		expect(tree.get(4)).toBeUndefined();
 		const path = tree.find(1.5);
 		expect(path.on).toBe(false);
 		expect(tree.next(path).on).toBe(true);
@@ -50,18 +52,46 @@ describe('One leaf, key-only, B+Tree', () => {
 		expect(tree.at(path)).toBe(2);
 	});
 
-	it('ranges work with inclusive and exclusive bounds', () => {
+	it('ranges work with inclusive, exclusive, and no bounds, ascending and descending', () => {
 		tree.insert(3);
 		tree.insert(1);
 		tree.insert(2);
 		const values: any = [];
-		for (let path of tree.range(new KeyRange(new KeyBound(1), new KeyBound(3, false)))) {
-			values.push(tree.at(path));
-		}
-		for (let path of tree.range(new KeyRange(new KeyBound(3, false), new KeyBound(1), false))) {
-			values.push(tree.at(path));
-		}
-		expect(values).toEqual([1, 2, 2, 1]);
+		pushRange(tree, values, new KeyRange(new KeyBound(1), new KeyBound(3, false)));
+		expect(values).toEqual([1, 2]); values.length = 0;
+		pushRange(tree, values, new KeyRange(new KeyBound(3, false), new KeyBound(1), false));
+		expect(values).toEqual([2, 1]); values.length = 0;
+		pushRange(tree, values, new KeyRange(undefined, new KeyBound(1)));
+		expect(values).toEqual([1]); values.length = 0;
+		pushRange(tree, values, new KeyRange(undefined, new KeyBound(3), false));
+		expect(values).toEqual([3]); values.length = 0;
+		pushRange(tree, values, new KeyRange(new KeyBound(3), undefined));
+		expect(values).toEqual([3]); values.length = 0;
+		pushRange(tree, values, new KeyRange(new KeyBound(1), undefined, false));
+		expect(values).toEqual([1]);
+	});
+
+	it('ranges that miss', () => {
+		tree.insert(3);
+		tree.insert(1);
+		tree.insert(2);
+		const values: any = [];
+		pushRange(tree, values, new KeyRange(new KeyBound(1.5), new KeyBound(2.5)));
+		expect(values).toEqual([2]); values.length = 0;
+		pushRange(tree, values, new KeyRange(new KeyBound(1.5, false), new KeyBound(2.5, false)));
+		expect(values).toEqual([2]); values.length = 0;
+		pushRange(tree, values, new KeyRange(new KeyBound(1.5), new KeyBound(2.5, false)));
+		expect(values).toEqual([2]); values.length = 0;
+		pushRange(tree, values, new KeyRange(new KeyBound(1.5, false), new KeyBound(2.5)));
+		expect(values).toEqual([2]); values.length = 0;
+		pushRange(tree, values, new KeyRange(new KeyBound(2.5), new KeyBound(1.5), false));
+		expect(values).toEqual([2]); values.length = 0;
+		pushRange(tree, values, new KeyRange(new KeyBound(2.5, false), new KeyBound(1.5, false), false));
+		expect(values).toEqual([2]); values.length = 0;
+		pushRange(tree, values, new KeyRange(new KeyBound(2.5), new KeyBound(1.5, false), false));
+		expect(values).toEqual([2]); values.length = 0;
+		pushRange(tree, values, new KeyRange(new KeyBound(2.5, false), new KeyBound(1.5), false));
+		expect(values).toEqual([2]);
 	});
 
 	it('inverted and empty ranges produce no results', () => {
@@ -72,16 +102,42 @@ describe('One leaf, key-only, B+Tree', () => {
 		for (let path of tree.range(new KeyRange(new KeyBound(1), new KeyBound(3, false), false))) {
 			values.push(tree.at(path));
 		}
+		expect(values).toEqual([]);
 		for (let path of tree.range(new KeyRange(new KeyBound(3, false), new KeyBound(1)))) {
 			values.push(tree.at(path));
 		}
+		expect(values).toEqual([]);
 		for (let path of tree.range(new KeyRange(new KeyBound(2, false), new KeyBound(2)))) {
 			values.push(tree.at(path));
 		}
+		expect(values).toEqual([]);
 		for (let path of tree.range(new KeyRange(new KeyBound(2), new KeyBound(2, false)))) {
 			values.push(tree.at(path));
 		}
 		expect(values).toEqual([]);
+		for (let path of tree.range(new KeyRange(new KeyBound(2, false), new KeyBound(3, false)))) {
+			values.push(tree.at(path));
+		}
+		expect(values).toEqual([]);
+		for (let path of tree.range(new KeyRange(new KeyBound(2, false), new KeyBound(3, false), false))) {
+			values.push(tree.at(path));
+		}
+		expect(values).toEqual([]);
+	});
+
+	it('single-item ranges produce one row', () => {
+		tree.insert(3);
+		tree.insert(1);
+		tree.insert(2);
+		const values: any = [];
+		for (let path of tree.range(new KeyRange(new KeyBound(2), new KeyBound(2)))) {
+			values.push(tree.at(path));
+		}
+		expect(values).toEqual([2]);
+		for (let path of tree.range(new KeyRange(new KeyBound(2), new KeyBound(2), false))) {
+			values.push(tree.at(path));
+		}
+		expect(values).toEqual([2,2]);
 	});
 
 	it('should handle an empty tree', () => {
@@ -231,4 +287,16 @@ describe('One leaf, key-only, B+Tree', () => {
 		expect(tree.at(tree.find(2))).toBe(undefined);
 	});
 
+	it('should detect non-deterministic compare', () => {
+		const tree = new BTree<number, number>(k => k, (a, b) => a < b ? -1 : a > b ? -1 : 0);
+		tree.insert(1);
+		expect(() => tree.insert(2)).toThrow();
+	});
+
 });
+function pushRange<TKey, TValue>(tree: BTree<TKey, TValue>, values: any, range: KeyRange<TKey>) {
+	for (let path of tree.range(range)) {
+		values.push(tree.at(path));
+	}
+}
+
