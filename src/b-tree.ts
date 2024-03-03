@@ -634,7 +634,6 @@ export class BTree<TKey, TEntry> {
 			path.leafIndex += leftSib.entries.length;
 			return this.rebalanceBranch(path, depth - 1);
 		}
-		return undefined;
 	}
 
 	private rebalanceBranch(path: Path<TKey, TEntry>, depth: number): ITreeNode | undefined {
