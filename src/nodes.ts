@@ -3,13 +3,13 @@ export interface ITreeNode { }
 
 export class LeafNode<TEntry> implements ITreeNode {
 	constructor(
-		public entries: TEntry[],    // These don't move so that they can be externally referenced -- only inserted and deleted (ordering happens through sequence)
+		public entries: TEntry[],
 	) { }
 }
 
-export class BranchNode<TPartition> implements ITreeNode {
+export class BranchNode<TKey> implements ITreeNode {
 	constructor(
-		public partitions: TPartition[],
-		public nodes: ITreeNode[],  // has capacity plus one, since partitions split nodes
+		public partitions: TKey[],	// partition[0] refers to the lowest key in nodes[1]
+		public nodes: ITreeNode[],  // has one more entry than partitions, since partitions split nodes
 	) { }
 }
