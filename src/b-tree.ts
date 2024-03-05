@@ -58,22 +58,23 @@ export class BTree<TKey, TEntry> {
 	/** Iterates based on the given range
 	 * WARNING: mutation during iteration will result in an exception
 	*/
-	*range(range: KeyRange<TKey>): Generator<Path<TKey, TEntry>, void, void> {
+	*range(range: KeyRange<TKey>): IterableIterator<Path<TKey, TEntry>> {
 		const startPath = range.first
 			? this.findFirst(range)
 			: (range.isAscending ? this.first() : this.last());
 		const endPath = range.last
 			? this.findLast(range)
 			: (range.isAscending ? this.last() : this.first());
+		const endKey = this.keyFromEntry(endPath.leafNode.entries[endPath.leafIndex]);
 		const iterable = range.isAscending
 			? this.internalAscending(startPath)
 			: this.internalDescending(startPath);
-		const iter = iterable[Symbol.iterator]();
-		for (let path of iter) {
+		const ascendingFactor = range.isAscending ? 1 : -1;
+		for (let path of iterable) {
 			if (!path.on || !endPath.on || this.compareKeys(
-					this.keyFromEntry(path.leafNode.entries[path.leafIndex]),
-					this.keyFromEntry(endPath.leafNode.entries[endPath.leafIndex])
-				) * (range.isAscending ? 1 : -1) > 0) {
+				this.keyFromEntry(path.leafNode.entries[path.leafIndex]),
+				endKey
+			) * ascendingFactor > 0) {
 				break;
 			}
 			yield path;
