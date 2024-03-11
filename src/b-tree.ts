@@ -459,7 +459,7 @@ export class BTree<TKey, TEntry> {
 	}
 
 	private internalInsertAt(path: Path<TKey, TEntry>, entry: TEntry) {
-		let split = this.leafInsert(path.leafNode, path.leafIndex, entry);
+		let split = this.leafInsert(path, entry);
 		let branchIndex = path.branches.length - 1;
 		while (split && branchIndex >= 0) {
 			split = this.branchInsert(path, branchIndex, split);
@@ -468,6 +468,7 @@ export class BTree<TKey, TEntry> {
 		if (split) {
 			const newBranch = new BranchNode<TKey>([split.key], [this._root, split.right]);
 			this._root = newBranch;
+			path.branches.unshift(new PathBranch(newBranch, split.indexDelta));
 		}
 	}
 
@@ -528,7 +529,8 @@ export class BTree<TKey, TEntry> {
 		}
 	}
 
-	private leafInsert(leaf: LeafNode<TEntry>, index: number, entry: TEntry): Split<TKey> | undefined {
+	private leafInsert(path: Path<TKey, TEntry>, entry: TEntry): Split<TKey> | undefined {
+		const { leafNode: leaf, leafIndex: index } = path;
 		if (leaf.entries.length < NodeCapacity) {  // No split needed
 			leaf.entries.splice(index, 0, entry);
 			return undefined;
@@ -542,52 +544,41 @@ export class BTree<TKey, TEntry> {
 		const newLeaf = new LeafNode(moveEntries);
 
 		// Insert new entry into appropriate node
-		if (index <= leaf.entries.length) {
+		if (index < midIndex) {
 			leaf.entries.splice(index, 0, entry);
 		} else {
-			newLeaf.entries.splice(index - leaf.entries.length, 0, entry);
+			path.leafNode = newLeaf;
+			path.leafIndex -= leaf.entries.length;
+			newLeaf.entries.splice(path.leafIndex, 0, entry);
 		}
 
-		return new Split<TKey>(this.keyFromEntry(moveEntries[0]), newLeaf);
+		return new Split<TKey>(this.keyFromEntry(moveEntries[0]), newLeaf, index < midIndex ? 0 : 1);
 	}
 
 	private branchInsert(path: Path<TKey, TEntry>, branchIndex: number, split: Split<TKey>): Split<TKey> | undefined {
 		const pathBranch = path.branches[branchIndex];
 		const { index, node } = pathBranch;
-		if (node.nodes.length < NodeCapacity) {  // no split needed
-			node.partitions.splice(index, 0, split.key);
-			node.nodes.splice(index + 1, 0, split.right);
+		pathBranch.index += split.indexDelta;
+		node.partitions.splice(index, 0, split.key);
+		node.nodes.splice(index + 1, 0, split.right);
+		if (node.nodes.length <= NodeCapacity) {  // no split needed
 			return undefined;
 		}
 		// Full. Split needed
 
-		const midIndex = (node.nodes.length + 1) >>> 1;
+		const midIndex = node.nodes.length >>> 1;
 		const movePartitions = node.partitions.splice(midIndex);
-		node.partitions.pop();	// Remove the extra partition
+		const newPartition = node.partitions.pop()!;	// Extra partition promoted to parent
 		const moveNodes = node.nodes.splice(midIndex);
 
 		// New node
 		const newBranch = new BranchNode(movePartitions, moveNodes);
 
-		// Insert into appropriate node
-		if (index < node.nodes.length) {
-			node.partitions.splice(index, 0, split.key);
-			node.nodes.splice(index + 1, 0, split.right);
-		} else {
-			pathBranch.index -= node.nodes.length;
-			newBranch.partitions.splice(pathBranch.index, 0, split.key);
-			newBranch.nodes.splice(pathBranch.index + 1, 0, split.right);
+		if (pathBranch.index >= midIndex) { // If new entry in new node, slide the index
+			pathBranch.index -= midIndex;
 		}
 
-		return new Split<TKey>(this.firstKeyOfNode(newBranch), newBranch);
-	}
-
-	private firstKeyOfNode(node: ITreeNode): TKey {
-		if (node instanceof LeafNode) {
-			return this.keyFromEntry((node as LeafNode<TEntry>).entries[0]!);
-		} else {
-			return this.firstKeyOfNode((node as BranchNode<TKey>).nodes[0]);
-		}
+		return new Split<TKey>(newPartition, newBranch, pathBranch.index < midIndex ? 0 : 1);
 	}
 
 	private rebalanceLeaf(path: Path<TKey, TEntry>, depth: number): ITreeNode | undefined {
@@ -690,7 +681,6 @@ export class BTree<TKey, TEntry> {
 			leftSib.partitions.push(pKey);
 			leftSib.partitions.push(...branch.partitions);
 			leftSib.nodes.push(...branch.nodes);
-			pNode.partitions.splice(pIndex - 1, 1);
 			pNode.nodes.splice(pIndex, 1);
 			pathBranch.node = leftSib;
 			pathBranch.index += leftSib.nodes.length;
@@ -718,6 +708,7 @@ class Split<TKey> {
 	constructor(
 		public key: TKey,
 		public right: ITreeNode,
+		public indexDelta: number,
 	) { }
 }
 

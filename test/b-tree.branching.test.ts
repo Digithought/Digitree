@@ -163,8 +163,12 @@ describe('Branching BTree', () => {
 	function addRange(starting: number, count: number) {
 		const s = Math.sign(count);
 		for (let i = 0; i !== count; i += s) {
-			if (!tree.insert(i + starting).on) {	// Expects here is slow
+			const path = tree.insert(i + starting);
+			if (!path.on) {	// Expects here is slow
 				throw new Error("Failed to insert " + (i + starting));
+			}
+			if (tree.at(path) !== i + starting) {
+				throw new Error(`Path not maintained: Expected ${i + starting} but got ${tree.at(path)}`);
 			}
 		}
 	}
@@ -173,8 +177,13 @@ describe('Branching BTree', () => {
 		const range = [...Array(end - start + 1).keys()];
 		while (range.length) {
 			const index = Math.floor(Math.random() * range.length);
-			if (!tree.insert(range.splice(index, 1)[0]).on) {
+			const value = range.splice(index, 1)[0];
+			const path = tree.insert(value);
+			if (!path.on) {
 				throw new Error("Failed to insert " + index);
+			}
+			if (tree.at(path) !== value) {
+				throw new Error(`Path not maintained: Expected ${value} but got ${tree.at(path)}`);
 			}
 		}
 	}
