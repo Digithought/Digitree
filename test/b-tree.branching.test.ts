@@ -138,6 +138,34 @@ describe('Branching BTree', () => {
 		expect(tree.getCount()).toBe(0);
 	});
 
+	it('build a larger tree - randomly', () => {
+		const count = NodeCapacity * NodeCapacity * NodeCapacity * 4;	// ~ 1 million
+		const randomStart = performance.now();
+		for (let i = 0; i !== count; ++i) {
+			Math.random();
+		}
+		const randomTime = performance.now() - randomStart;
+		const insertStart = performance.now();
+		for (let i = 0; i !== count; ++i) {
+			tree.insert(Math.random());
+		}
+		const insertTime = performance.now() - insertStart;
+		console.log(`Random: ${randomTime}ms, Insert: ${insertTime}ms, Net: ${insertTime - randomTime}ms`);
+		expect(tree.getCount()).toBeCloseTo(count, 2);
+		// Gut randomly
+		while (tree.first().on) {
+			const path = tree.find(Math.random());
+			if (!path.on) {
+				tree.moveNext(path);
+			}
+			if (!path.on) {
+				tree.movePrior(path);
+			}
+			tree.deleteAt(path);
+		}
+		expect(tree.getCount()).toBe(0);
+	});
+
 	it('getCount should give the correct number, whether ascending or descending, with a starting path, or not', () => {
 		const count = NodeCapacity * NodeCapacity + 1;
 		addRange(0, count);
