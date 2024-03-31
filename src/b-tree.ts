@@ -20,7 +20,7 @@ export class BTree<TKey, TEntry> {
 	 */
 	constructor(
 		private readonly keyFromEntry = (entry: TEntry) => entry as unknown as TKey,
-		private readonly compare = (a: TKey, b: TKey) => a < b ? -1 : a > b ? 1 : 0,
+		private readonly compare = (a: TKey, b: TKey) => a < b ? -1 : a > b ? 1 : 0 as number,
 	) {
 		this._root = new LeafNode([]);
 	}
