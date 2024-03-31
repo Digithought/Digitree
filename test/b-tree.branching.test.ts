@@ -139,7 +139,12 @@ describe('Branching BTree', () => {
 	});
 
 	it('build a larger tree - randomly', () => {
-		tree = new BTree<number, number>(e => e, (a, b) => a - b);
+		class FastTree extends BTree<number, number> {	// Faster comparison - don't bother ensuring consistency for speed
+			compareKeys(a: number, b: number) {
+				return a - b;
+			}
+		}
+		tree = new FastTree();
 		const count = NodeCapacity * NodeCapacity * NodeCapacity * 4;	// ~ 1 million
 		const randomStart = performance.now();
 		for (let i = 0; i !== count; ++i) {
