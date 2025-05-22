@@ -576,7 +576,7 @@ export class BTree<TKey, TEntry> {
 		const newBranch = new BranchNode(movePartitions, moveNodes);
 
 		const delta = pathBranch.index < midIndex ? 0 : 1;
-		if (delta !== 0) { // If new entry in new node, repoint and slide the index
+		if (delta) { // If new entry in new node, repoint and slide the index
 			pathBranch.index -= midIndex;
 			pathBranch.node = newBranch;
 		}
