@@ -1,4 +1,5 @@
-import { KeyBound, KeyRange, NodeCapacity, BTree } from '../src';
+import { expect } from 'chai';
+import { BTree } from '../src/index.js';
 
 describe('BTree Path Validation', () => {
 	let tree: BTree<number, number>; // Example using number for both TKey and TEntry for simplicity
@@ -20,8 +21,8 @@ describe('BTree Path Validation', () => {
 		// Perform non-mutating operation
 		tree.at(path);
 		const isValidAfter = tree.isValid(path);
-		expect(isValidBefore).toBe(true);
-		expect(isValidAfter).toBe(true);
+		expect(isValidBefore).to.be.true;
+		expect(isValidAfter).to.be.true;
 	});
 
 	it('path is invalidated after insert', () => {
@@ -29,7 +30,7 @@ describe('BTree Path Validation', () => {
 		const path = tree.find(2);
 		tree.insert(4); // Mutating operation
 		const isValid = tree.isValid(path);
-		expect(isValid).toBe(false);
+		expect(isValid).to.be.false;
 	});
 
 	it('path is invalidated after delete', () => {
@@ -37,7 +38,7 @@ describe('BTree Path Validation', () => {
 		const path = tree.find(2);
 		tree.deleteAt(path); // Mutating operation
 		const isValid = tree.isValid(path);
-		expect(isValid).toBe(false);
+		expect(isValid).to.be.false;
 	});
 
 	it('path is invalidated after update', () => {
@@ -45,7 +46,7 @@ describe('BTree Path Validation', () => {
 		const path = tree.find(2);
 		tree.updateAt(path, 5); // Mutating operation
 		const isValid = tree.isValid(path);
-		expect(isValid).toBe(false);
+		expect(isValid).to.be.false;
 	});
 
 	it('path is invalidated during iteration after mutation', () => {
@@ -55,8 +56,8 @@ describe('BTree Path Validation', () => {
 		const firstPath = iterator.next().value;
 		tree.insert(6); // Mutating operation during iteration
 		const isValid = tree.isValid(firstPath!);
-		expect(isValid).toBe(false);
-		expect(() => iterator.next()).toThrow();
+		expect(isValid).to.be.false;
+		expect(() => iterator.next()).to.throw();
 	});
 
 	it('merge operation does not proceed when getUpdated mutates the tree', () => {
@@ -75,7 +76,7 @@ describe('BTree Path Validation', () => {
 		};
 
 		// Expect an exception to be thrown, preventing the merge
-		expect(attemptMutationInGetUpdated).toThrow();
+		expect(attemptMutationInGetUpdated).to.throw();
 	});
 
 });

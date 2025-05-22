@@ -1,5 +1,6 @@
-import { KeyRange, Path, PathBranch } from ".";
-import { BranchNode, ITreeNode, LeafNode } from "./nodes";
+import { KeyRange } from "./key-range.js";
+import { BranchNode, ITreeNode, LeafNode } from "./nodes.js";
+import { Path, PathBranch } from "./path.js";
 
 /** Node capacity.  Not configurable - not worth the runtime memory, when almost nobody will touch this */
 export const NodeCapacity = 64;
@@ -574,11 +575,13 @@ export class BTree<TKey, TEntry> {
 		// New node
 		const newBranch = new BranchNode(movePartitions, moveNodes);
 
-		if (pathBranch.index >= midIndex) { // If new entry in new node, slide the index
+		const delta = pathBranch.index < midIndex ? 0 : 1;
+		if (delta !== 0) { // If new entry in new node, repoint and slide the index
 			pathBranch.index -= midIndex;
+			pathBranch.node = newBranch;
 		}
 
-		return new Split<TKey>(newPartition, newBranch, pathBranch.index < midIndex ? 0 : 1);
+		return new Split<TKey>(newPartition, newBranch, delta);
 	}
 
 	private rebalanceLeaf(path: Path<TKey, TEntry>, depth: number): ITreeNode | undefined {

@@ -5,25 +5,38 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "node",
-            "name": "vscode-jest-tests.v2.Digitree",
+            "type": "pwa-node",
             "request": "launch",
-            "args": [
-                "--runInBand",
-                "--watchAll=false",
-                "--testNamePattern",
-                "${jest.testNamePattern}",
-                "--runTestsByPath",
-                "${jest.testFile}"
+            "name": "Mocha - Current Test File",
+            "runtimeExecutable": "node",
+            "runtimeArgs": [
+                "--loader=ts-node/esm"
             ],
-            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}/node_modules/mocha/bin/mocha.js",
+            "args": [
+                "${file}", // Runs the currently open file
+                "--colors"
+            ],
             "console": "integratedTerminal",
             "internalConsoleOptions": "neverOpen",
-            "disableOptimisticBPs": true,
-            "program": "${workspaceFolder}/node_modules/.bin/jest",
-            "windows": {
-                "program": "${workspaceFolder}/node_modules/jest/bin/jest"
-            }
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "pwa-node",
+            "request": "launch",
+            "name": "Mocha - All Tests",
+            "runtimeExecutable": "node",
+            "runtimeArgs": [
+                "--loader=ts-node/esm"
+            ],
+            "program": "${workspaceFolder}/node_modules/mocha/bin/mocha.js",
+            "args": [
+                "test/**/*.test.ts", // Glob pattern for your test files
+                "--colors"
+            ],
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

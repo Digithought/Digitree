@@ -8,10 +8,7 @@
 		"outDir": "./dist",
 		"strict": true,
 		"esModuleInterop": true,
-		"sourceMap": true,
-		"types": [
-			"jest"
-		]
+		"sourceMap": true
 	},
 	"include": [
 		"src", "test"

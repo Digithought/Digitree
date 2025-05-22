@@ -1,23 +1,24 @@
-import { KeyBound, KeyRange, NodeCapacity, BTree } from '../src';
-import { LeafNode } from '../src/nodes';
+import { expect } from 'chai';
+import { KeyBound, KeyRange, NodeCapacity, BTree } from '../src/index.js';
+import { BranchNode, LeafNode } from '../src/nodes.js';
 
 describe('Branching BTree', () => {
-  let tree: BTree<number, number>;
+	let tree: BTree<number, number>;
 
-  beforeEach(() => {
-    tree = new BTree<number, number>();
-  });
+	beforeEach(() => {
+		tree = new BTree<number, number>();
+	});
 
 	it('should grow to multiple branches right', () => {
 		addRange(0, NodeCapacity + 1);
 		expectRange(0, NodeCapacity + 1);
-		expect((tree as any)["_root"]["nodes"].length).toBe(2);
+		expect((tree as any)["_root"]["nodes"].length).to.equal(2);
 	});
 
 	it('should grow to multiple branches left', () => {
 		addRange(0, -(NodeCapacity + 1));
 		expectRange(0, -(NodeCapacity + 1));
-		expect((tree as any)["_root"]["nodes"].length).toBe(2);
+		expect((tree as any)["_root"]["nodes"].length).to.equal(2);
 	});
 
 	// Iterate ascending across branches
@@ -25,7 +26,7 @@ describe('Branching BTree', () => {
 		addRange(0, NodeCapacity + 1);
 		let i = 0;
 		for (let path of tree.range(new KeyRange(new KeyBound(0), new KeyBound(NodeCapacity)))) {
-			expect(tree.at(path)).toBe(i);
+			expect(tree.at(path)).to.equal(i);
 			++i;
 		}
 	});
@@ -35,7 +36,7 @@ describe('Branching BTree', () => {
 		addRange(0, NodeCapacity + 1);
 		let i = NodeCapacity;
 		for (let path of tree.range(new KeyRange(new KeyBound(NodeCapacity), new KeyBound(0), false))) {
-			expect(tree.at(path)).toBe(i);
+			expect(tree.at(path)).to.equal(i);
 			--i;
 		}
 	});
@@ -50,8 +51,8 @@ describe('Branching BTree', () => {
 		tree.deleteAt(tree.find(gap + halfCap - 1));	// Remove again from tail of leaf 1 - drops below half capacity and should borrow from leaf 0
 		expectRange(0, halfCap + 1);
 		expectRange(gap, halfCap - 1);
-		expect(tree.find(halfCap - 1).branches[0].index).toBe(0);
-		expect(tree.find(halfCap).branches[0].index).toBe(1);	// previous insert should now be on leaf 1
+		expect(tree.find(halfCap - 1).branches[0].index).to.equal(0);
+		expect(tree.find(halfCap).branches[0].index).to.equal(1);	// previous insert should now be on leaf 1
 	});
 
 	it('should borrow left', () => {
@@ -62,8 +63,8 @@ describe('Branching BTree', () => {
 		tree.deleteAt(tree.find(halfCap - 1));	// Remove from tail of leaf 0
 		expectRange(0, halfCap - 1);
 		expectRange(gap, halfCap + 1);
-		expect(tree.find(gap).branches[0].index).toBe(0);	// head of leaf 1 should now be tail of leaf 0
-		expect(tree.find(gap + 1).branches[0].index).toBe(1);
+		expect(tree.find(gap).branches[0].index).to.equal(0);	// head of leaf 1 should now be tail of leaf 0
+		expect(tree.find(gap + 1).branches[0].index).to.equal(1);
 	});
 
 	it('should merge right', () => {
@@ -75,8 +76,8 @@ describe('Branching BTree', () => {
 		tree.deleteAt(tree.find(halfCap - 1));	// remove an entry, should suffice for the two nodes to be merged
 		expectRange(0, halfCap - 1);
 		expectRange(gap + 1, halfCap);
-		expect(tree.getCount()).toBe(NodeCapacity - 1);
-		expect((tree as any)["_root"] instanceof LeafNode).toBe(true);
+		expect(tree.getCount()).to.equal(NodeCapacity - 1);
+		expect((tree as any)["_root"] instanceof LeafNode).to.be.true;
 	});
 
 	it('should merge right', () => {
@@ -88,8 +89,8 @@ describe('Branching BTree', () => {
 		tree.deleteAt(tree.find(gap + halfCap - 1));	// remove an entry, should suffice for the two nodes to be merged
 		expectRange(0, halfCap);
 		expectRange(gap, halfCap - 1);
-		expect(tree.getCount()).toBe(NodeCapacity - 1);
-		expect((tree as any)["_root"] instanceof LeafNode).toBe(true);
+		expect(tree.getCount()).to.equal(NodeCapacity - 1);
+		expect((tree as any)["_root"] instanceof LeafNode).to.be.true;
 	});
 
 	it('build a large tree - right', () => {
@@ -100,14 +101,14 @@ describe('Branching BTree', () => {
 		deleteRange((count >> 1) - 128, 256);
 		expectRange(0, (count >> 1) - 128);
 		expectRange((count >> 1) + 128, count - ((count >> 1) + 128));
-		expect(tree.getCount()).toBe(count - 256);
+		expect(tree.getCount()).to.equal(count - 256);
 		// fill the gap back in
 		addRange((count >> 1) - 128, 256);
 		expectRange(0, count);
-		expect(tree.getCount()).toBe(count);
+		expect(tree.getCount()).to.equal(count);
 		// Gut from the right
 		deleteRange(count - 1, -count);
-		expect(tree.getCount()).toBe(0);
+		expect(tree.getCount()).to.equal(0);
 	});
 
 	it('build a large tree - left', () => {
@@ -118,24 +119,87 @@ describe('Branching BTree', () => {
 		deleteRange((count >> 1) + 128, -256);
 		expectRange(0, (count >> 1) - 128);
 		expectRange((count >> 1) + 128 + 1, count - ((count >> 1) + 128 + 1));
-		expect(tree.getCount()).toBe(count - 256);
+		expect(tree.getCount()).to.equal(count - 256);
 		// fill the gap back in
 		addRange((count >> 1) + 128, -256);
 		expectRange(0, count);
-		expect(tree.getCount()).toBe(count);
+		expect(tree.getCount()).to.equal(count);
 		// Gut from the left
 		deleteRange(0, count);
-		expect(tree.getCount()).toBe(0);
+		expect(tree.getCount()).to.equal(0);
+	});
+
+	it('should correctly form path when a branch split causes root to split under specific conditions', () => {
+		const C = NodeCapacity; // Typically 64
+		const K_TARGET_LEAF_INDEX = ((C + 1) >>> 1) - 1; // Index of the leaf we'll cause to split, e.g., 31 for C=64
+
+		// Manual Tree Setup:
+		// Create a root BranchNode R with C children LeafNodes (L_0 to L_{C-1}).
+		// Each L_i is full with C sorted entries: L_i = [i*C, ..., (i+1)*C - 1].
+		// R's partitions are [C, 2*C, ..., (C-1)*C].
+		// R is full of children.
+
+		const leaves: LeafNode<number>[] = [];
+		for (let i = 0; i < C; i++) {
+			const entries: number[] = [];
+			for (let j = 0; j < C; j++) {
+				entries.push(i * C + j);
+			}
+			leaves.push(new LeafNode(entries));
+		}
+
+		const partitions: number[] = [];
+		for (let i = 1; i < C; i++) { // Partitions are keys of L_1 onwards
+			partitions.push(i * C);
+		}
+
+		const rootBranchNode = new BranchNode(partitions, leaves); // Access BranchNode constructor
+		(tree as any)['_root'] = rootBranchNode;
+
+		// Critical Insertion:
+		// Target leaf L_k where k = K_TARGET_LEAF_INDEX (e.g., L_31).
+		// L_k contains [k*C, ..., (k+1)*C - 1].
+		// Insert V = (k+1)*C - 0.5. This is unique and larger than all entries in L_k,
+		// ensuring it splits L_k and V goes into the right part of L_k's split.
+		// e.g., L_31 = [1984..2047]. V = (31+1)*64 - 0.5 = 2047.5.
+		const V = (K_TARGET_LEAF_INDEX + 1) * C - 0.5;
+
+		// This insertion is designed to:
+		// 1. Cause L_k to split. V goes to L_k_right (childSplit.indexDelta = 1).
+		// 2. Split propagates to R (current root). Original index of L_k in R is K_TARGET_LEAF_INDEX.
+		//    Effective path index in R (for L_k_right) becomes K_TARGET_LEAF_INDEX + 1.
+		// 3. R is full, so R itself splits. Midpoint for R's node array split is (C+1)>>>1.
+		//    The condition (path_idx_in_R == midPoint_of_R_split) is met:
+		//    (K_TARGET_LEAF_INDEX + 1) == ((C+1)>>>1) because K_TARGET_LEAF_INDEX = ((C+1)>>>1) - 1.
+		//    - Correct R_split.indexDelta (for new root G) should be 1.
+		//    - The old buggy logic would result in R_split.indexDelta = 0.
+		const pathV = tree.insert(V);
+
+		expect(tree.at(pathV)).to.equal(V, "Inserted value should be retrievable via the returned path.");
+
+		// Path: NewRoot_G -> R_right -> L_k_right_leaf
+		// branches[0] is for NewRoot_G. branches[1] is for R_right.
+		expect(pathV.branches.length).to.be.greaterThanOrEqual(2, "Path should have at least two branches after root split.");
+
+		const G_info = pathV.branches[0]; // Info for the new root node G
+		const R_right_node_from_path = pathV.branches[1].node; // The actual R_right node from the path
+
+		// G_info.index should be 1, as G.nodes = [R_left, R_right], and the path to V goes through R_right.
+		expect(G_info.index).to.equal(1, "Path branch for new root (G_info.index) should point to the right-hand split of the old root (R_right).");
+
+		// Further check: Ensure G_info.index correctly identifies R_right_node_from_path within G_info.node.nodes array.
+		const R_right_actual_node_from_G_nodes_array = G_info.node.nodes[G_info.index];
+		expect(R_right_actual_node_from_G_nodes_array).to.equal(R_right_node_from_path, "New root's (G) path branch index correctly leads to the R_right child node.");
 	});
 
 	it('build a large tree - randomly', () => {
 		const count = NodeCapacity * NodeCapacity + 1;
 		addRandom(0, count - 1);
 		expectRange(0, count);
-		expect(tree.getCount()).toBe(count);
+		expect(tree.getCount()).to.equal(count);
 		// Gut randomly
 		deleteRandom(0, count - 1);
-		expect(tree.getCount()).toBe(0);
+		expect(tree.getCount()).to.equal(0);
 	});
 
 	it('build a larger tree - randomly', () => {
@@ -157,7 +221,7 @@ describe('Branching BTree', () => {
 		}
 		const insertTime = performance.now() - insertStart;
 		console.log(`Random: ${randomTime}ms, Insert: ${insertTime}ms, Net: ${insertTime - randomTime}ms`);
-		expect(tree.getCount()).toBeCloseTo(count, 2);
+		expect(tree.getCount()).to.be.closeTo(count, 2);
 		// Gut randomly
 		while (tree.first().on) {
 			const path = tree.find(Math.random());
@@ -169,29 +233,29 @@ describe('Branching BTree', () => {
 			}
 			tree.deleteAt(path);
 		}
-		expect(tree.getCount()).toBe(0);
-	});
+		expect(tree.getCount()).to.equal(0);
+	}).timeout(10000);
 
 	it('getCount should give the correct number, whether ascending or descending, with a starting path, or not', () => {
 		const count = NodeCapacity * NodeCapacity + 1;
 		addRange(0, count);
-		expect(tree.getCount()).toBe(count);
-		expect(tree.getCount({ path: tree.find(count >>> 1), ascending: false })).toBe(count - (count >>> 1));
-		expect(tree.getCount({ path: tree.find(count >>> 1) })).toBe(count - (count >>> 1));
+		expect(tree.getCount()).to.equal(count);
+		expect(tree.getCount({ path: tree.find(count >>> 1), ascending: false })).to.equal(count - (count >>> 1));
+		expect(tree.getCount({ path: tree.find(count >>> 1) })).to.equal(count - (count >>> 1));
 	});
 
 	it('ascending and descending should work over large trees', () => {
 		const count = NodeCapacity * NodeCapacity + 1;
 		addRange(0, count);
 		let i = 0;
-		for (const {} of tree.ascending(tree.first())) {
+		for (const { } of tree.ascending(tree.first())) {
 			++i;
 		}
-		expect(i).toBe(count);
-		for (const {} of tree.descending(tree.last())) {
+		expect(i).to.equal(count);
+		for (const { } of tree.descending(tree.last())) {
 			--i;
 		}
-		expect(i).toBe(0);
+		expect(i).to.equal(0);
 	});
 
 	function addRange(starting: number, count: number) {
@@ -245,9 +309,9 @@ describe('Branching BTree', () => {
 		const s = Math.sign(count);
 		let i = starting;
 		for (let path of tree.range(new KeyRange(new KeyBound(starting), new KeyBound(starting + count + -s), s > 0))) {
-			expect(tree.at(path)).toBe(i);
+			expect(tree.at(path)).to.equal(i);
 			i += s;
 		}
-		expect(i).toBe(starting + count);
+		expect(i).to.equal(starting + count);
 	}
 });

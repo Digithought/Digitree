@@ -1,5 +1,5 @@
-import { KeyBound, KeyRange, NodeCapacity } from '../src';
-import { BTree } from '../src/b-tree';
+import { expect } from 'chai';
+import { BTree, KeyBound, KeyRange, NodeCapacity } from '../src/index.js';
 
 describe('Dictionary BTree', () => {
 	interface Entry { id: number, value: string };
@@ -14,28 +14,28 @@ describe('Dictionary BTree', () => {
 		const count = NodeCapacity * NodeCapacity + 1;
 		addRandom(0, count - 1);
 		expectRange(0, count);
-		expect(tree.getCount()).toBe(count);
+		expect(tree.getCount()).to.equal(count);
 		// Gut randomly
 		deleteRandom(0, count - 1);
-		expect(tree.getCount()).toBe(0);
+		expect(tree.getCount()).to.equal(0);
 	});
 
 	it('build a large tree randomly, operate on', () => {
 		const count = NodeCapacity * NodeCapacity + 1;
 		addRandom(0, count - 1);
 		expectRange(0, count);
-		expect(tree.getCount()).toBe(count);
+		expect(tree.getCount()).to.equal(count);
 
 		// Range scan
 		const values: Entry[] = [];
 		for (let path of tree.range(new KeyRange(new KeyBound(100), new KeyBound(200, false)))) {
 			values.push(tree.at(path)!);
 		}
-		expect(values).toStrictEqual([...Array(100).keys()].map(i => ({ id: i + 100, value: (i + 100).toString() })));
+		expect(values).to.deep.equal([...Array(100).keys()].map(i => ({ id: i + 100, value: (i + 100).toString() })));
 
 		// Gut randomly
 		deleteRandom(0, count - 1);
-		expect(tree.getCount()).toBe(0);
+		expect(tree.getCount()).to.equal(0);
 	});
 
 	function addRandom(start: number, end: number) {
@@ -63,9 +63,9 @@ describe('Dictionary BTree', () => {
 		const s = Math.sign(count);
 		let i = starting;
 		for (let path of tree.range(new KeyRange(new KeyBound(starting), new KeyBound(starting + count + -s), s > 0))) {
-			expect(tree.at(path)).toStrictEqual({ id: i, value: i.toString() });
+			expect(tree.at(path)).to.deep.equal({ id: i, value: i.toString() });
 			i += s;
 		}
-		expect(i).toBe(starting + count);
+		expect(i).to.equal(starting + count);
 	}
 });

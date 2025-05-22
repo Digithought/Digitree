@@ -36,9 +36,10 @@ Via npm:
   npm install digitree
 ```
 
-Via pnpm:
+Via pnpm/yarn:
 ```
-  npm add digitree
+  pnpm add digitree
+  yarn add digitree
 ```
 
 #### As an ordered set
@@ -125,5 +126,5 @@ Try to be sure that the enhancement isn't only associated with a particular usag
 #### Environment
 
 * If using VSCode use the editorconfig plugin to honor the conventions in `.editorconfig`
-* Build: `pnpm build` or `npm run build`
-* Test: `pnpm test` or `npm test`
+* Build: `yarn build` or `npm run build`
+* Test: `yarn test` or `npm test`
