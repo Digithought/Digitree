@@ -594,7 +594,7 @@ export class BTree<TKey, TEntry> {
 		const pIndex = parent.index;
 		const pNode = parent.node;
 
-		const rightSib = pIndex < pNode.nodes.length ? pNode.nodes[pIndex + 1] as LeafNode<TEntry> : undefined;
+		const rightSib = pNode.nodes[pIndex + 1] as LeafNode<TEntry> | undefined;
 		if (rightSib && rightSib.entries.length > (NodeCapacity >>> 1)) {   // Attempt to borrow from right sibling
 			const entry = rightSib.entries.shift()!;
 			leaf.entries.push(entry);
@@ -602,7 +602,7 @@ export class BTree<TKey, TEntry> {
 			return undefined;
 		}
 
-		const leftSib = pIndex > 0 ? pNode.nodes[pIndex - 1] as LeafNode<TEntry> : undefined;
+		const leftSib = pNode.nodes[pIndex - 1] as LeafNode<TEntry> | undefined;
 		if (leftSib && leftSib.entries.length > (NodeCapacity >>> 1)) {   // Attempt to borrow from left sibling
 			const entry = leftSib.entries.pop()!;
 			leaf.entries.unshift(entry);
@@ -622,11 +622,11 @@ export class BTree<TKey, TEntry> {
 		}
 
 		if (leftSib && leftSib.entries.length + leaf.entries.length <= NodeCapacity) {  // Attempt to merge into left sibling (leaf deleted)
+			path.leafNode = leftSib;
+			path.leafIndex += leftSib.entries.length;
 			leftSib.entries.push(...leaf.entries);
 			pNode.partitions.splice(pIndex - 1, 1);
 			pNode.nodes.splice(pIndex, 1);
-			path.leafNode = leftSib;
-			path.leafIndex += leftSib.entries.length;
 			return this.rebalanceBranch(path, depth - 1);
 		}
 	}
@@ -646,7 +646,7 @@ export class BTree<TKey, TEntry> {
 		const pIndex = parent.index;
 		const pNode = parent.node;
 
-		const rightSib = pIndex < pNode.nodes.length ? (pNode.nodes[pIndex + 1]) as BranchNode<TKey> : undefined;
+		const rightSib = pNode.nodes[pIndex + 1] as BranchNode<TKey> | undefined;
 		if (rightSib && rightSib.nodes.length > (NodeCapacity >>> 1)) {   // Attempt to borrow from right sibling
 			branch.partitions.push(pNode.partitions[pIndex]);
 			const node = rightSib.nodes.shift()!;
@@ -656,7 +656,7 @@ export class BTree<TKey, TEntry> {
 			return undefined;
 		}
 
-		const leftSib = pIndex > 0 ? (pNode.nodes[pIndex - 1] as BranchNode<TKey>) : undefined;
+		const leftSib = pNode.nodes[pIndex - 1] as BranchNode<TKey> | undefined;
 		if (leftSib && leftSib.nodes.length > (NodeCapacity >>> 1)) {   // Attempt to borrow from left sibling
 			branch.partitions.unshift(pNode.partitions[pIndex - 1]);
 			const node = leftSib.nodes.pop()!;
@@ -673,20 +673,20 @@ export class BTree<TKey, TEntry> {
 			branch.partitions.push(...rightSib.partitions);
 			branch.nodes.push(...rightSib.nodes);
 			pNode.nodes.splice(pIndex + 1, 1);
-			if (pIndex === 0 && pNode.partitions.length > 0) {	// if parent is left edge, new right sibling is now the first partition
+			if (pIndex === 0 && pNode.partitions.length > 0) {	// if branch is left edge of parent, new right sibling is now the first partition
 				this.updatePartition(pIndex, path, depth - 1, pNode.partitions[0]);
 			}
 			return this.rebalanceBranch(path, depth - 1);
 		}
 
 		if (leftSib && leftSib.nodes.length + branch.nodes.length <= NodeCapacity) {   // Attempt to merge self into left sibling
+			pathBranch.node = leftSib;
+			pathBranch.index += leftSib.nodes.length;
 			const pKey = pNode.partitions.splice(pIndex - 1, 1)[0];
 			leftSib.partitions.push(pKey);
 			leftSib.partitions.push(...branch.partitions);
 			leftSib.nodes.push(...branch.nodes);
 			pNode.nodes.splice(pIndex, 1);
-			pathBranch.node = leftSib;
-			pathBranch.index += leftSib.nodes.length;
 			return this.rebalanceBranch(path, depth - 1);
 		}
 	}

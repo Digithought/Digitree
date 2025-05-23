@@ -314,4 +314,93 @@ describe('Branching BTree', () => {
 		}
 		expect(i).to.equal(starting + count);
 	}
+
+	// Helper function to shuffle an array
+	function shuffleArray<T>(array: T[]): T[] {
+		const newArray = [...array];
+		for (let i = newArray.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+		}
+		return newArray;
+	}
+
+	// Helper function to validate a path to an existing key
+	function validatePathToKey(tree: BTree<number, number>, key: number) {
+		const path = tree.find(key);
+		expect(path.on).to.be.equal(true, `Path for key ${key} should be 'on'.`);
+		expect(tree.at(path)).to.equal(key, `tree.at(path) for key ${key} should return the key.`);
+		expect(path.leafNode.entries[path.leafIndex]).to.equal(key, `Leaf entry for key ${key} is incorrect.`);
+
+		let currentExpectedChildNode: any = path.leafNode; // Use 'any' if ITreeNode is not easily importable here
+		for (let i = path.branches.length - 1; i >= 0; i--) {
+			const b = path.branches[i];
+			expect(b.index).to.be.greaterThanOrEqual(0, `Branch index for key ${key} at branch level ${i} is out of bounds (negative).`);
+			// If path.on is true, the branch index must point to an actual child node in the path.
+			expect(b.index).to.be.lessThan(b.node.nodes.length, `Branch index for key ${key} at branch level ${i} is out of bounds (too large).`);
+			expect(b.node.nodes[b.index]).to.equal(currentExpectedChildNode, `Branch linkage for key ${key} at branch level ${i} is incorrect.`);
+			currentExpectedChildNode = b.node;
+		}
+		expect((tree as any)['_root']).to.equal(currentExpectedChildNode, `Path for key ${key} does not lead back to the tree root.`);
+	}
+
+	function verifyAllPresentKeys(tree: BTree<number, number>, presentKeys: Set<number>) {
+		if (presentKeys.size === 0) {
+			const root = (tree as any)['_root'];
+			expect(root instanceof LeafNode).to.be.equal(true, 'Root should be an empty LeafNode when tree is empty.');
+			expect((root as any).entries.length).to.equal(0, 'Root leaf should have no entries when tree is empty.');
+			return;
+		}
+		for (const k of presentKeys) {
+			validatePathToKey(tree, k);
+		}
+	}
+
+	it('paths remain valid and correct through randomized insertions and deletions', function() {
+		// Using a traditional function for 'this' context if needed for long-running test timeout, though not strictly necessary here.
+		// this.timeout(10000); // Example: Increase timeout for a potentially long test if using Mocha specific features
+
+		const C = NodeCapacity;
+		const N = C * 2; // Number of items to insert and delete. C*2 should be enough for 2-3 levels.
+
+		const presentKeys = new Set<number>();
+		const itemsToInsert = shuffleArray([...Array(N).keys()].map(k => k + 0.1)); // Use non-integers to avoid conflicts with partition logic if it assumes integers
+		const itemsToDelete = shuffleArray([...itemsToInsert]);
+
+		// Insertion Phase
+		for (let i = 0; i < N; i++) {
+			const val = itemsToInsert[i];
+			const returnedPath = tree.insert(val);
+
+			expect(returnedPath.on).to.be.equal(true, `Path for inserted key ${val} should be 'on'.`);
+			expect(tree.at(returnedPath)).to.equal(val, `tree.at(path) for inserted key ${val} should return the key.`);
+			presentKeys.add(val);
+			if (i % Math.max(1, Math.floor(N / 20)) === 0 || i === N -1 ) { // Verify all keys periodically and at the end
+				verifyAllPresentKeys(tree, presentKeys);
+			}
+		}
+		verifyAllPresentKeys(tree, presentKeys); // Final check after all insertions
+
+		// Deletion Phase
+		for (let i = 0; i < N; i++) {
+			const val = itemsToDelete[i];
+			const pathToDelete = tree.find(val);
+			expect(pathToDelete.on).to.be.equal(true, `Path for key ${val} to be deleted should be 'on' before deletion.`);
+
+			const deleteSucceeded = tree.deleteAt(pathToDelete);
+			expect(deleteSucceeded).to.be.equal(true, `Deletion of key ${val} should succeed.`);
+			expect(pathToDelete.on).to.be.equal(false, `Path for key ${val} should be 'off' after deleteAt modifies it.`);
+
+			const pathAfterDelete = tree.find(val);
+			expect(pathAfterDelete.on).to.be.equal(false, `Path for key ${val} should be 'off' after finding it post-deletion.`);
+			presentKeys.delete(val);
+			if (i % Math.max(1, Math.floor(N / 20)) === 0 || i === N - 1) { // Verify all keys periodically and at the end
+				verifyAllPresentKeys(tree, presentKeys);
+			}
+		}
+		verifyAllPresentKeys(tree, presentKeys); // Final check after all deletions (presentKeys should be empty)
+
+		expect(presentKeys.size).to.equal(0, 'All keys should be deleted.');
+		expect(tree.getCount()).to.equal(0, 'Tree count should be 0 after all deletions.');
+	});
 });
