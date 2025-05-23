@@ -544,16 +544,16 @@ export class BTree<TKey, TEntry> {
 		// New node
 		const newLeaf = new LeafNode(moveEntries);
 
-		// Insert new entry into appropriate node
-		if (index < midIndex) {
-			leaf.entries.splice(index, 0, entry);
-		} else {
+		const delta = index < midIndex ? 0 : 1;
+		if (delta) {	// new node goes into the new leaf
 			path.leafNode = newLeaf;
 			path.leafIndex -= leaf.entries.length;
 			newLeaf.entries.splice(path.leafIndex, 0, entry);
+		} else {	// new node goes into the old leaf
+			leaf.entries.splice(index, 0, entry);
 		}
 
-		return new Split<TKey>(this.keyFromEntry(moveEntries[0]), newLeaf, index < midIndex ? 0 : 1);
+		return new Split<TKey>(this.keyFromEntry(moveEntries[0]), newLeaf, delta);
 	}
 
 	private branchInsert(path: Path<TKey, TEntry>, branchIndex: number, split: Split<TKey>): Split<TKey> | undefined {
