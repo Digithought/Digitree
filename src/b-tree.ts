@@ -436,7 +436,7 @@ export class BTree<TKey, TEntry> {
 					const pathBranch = path.branches.at(-1)!;
 					this.updatePartition(pathBranch.index, path, path.branches.length - 1, this.keyFromEntry(path.leafNode.entries[path.leafIndex]));
 				}
-				const newRoot = this.rebalanceLeaf(path, path.branches.length);
+				const newRoot = this.rebalanceLeaf(path);
 				if (newRoot) {
 					this._root = newRoot;
 				}
@@ -584,13 +584,14 @@ export class BTree<TKey, TEntry> {
 		return new Split<TKey>(newPartition, newBranch, delta);
 	}
 
-	private rebalanceLeaf(path: Path<TKey, TEntry>, depth: number): ITreeNode | undefined {
-		if (depth === 0 || path.leafNode.entries.length >= (NodeCapacity >>> 1)) {
+	private rebalanceLeaf(path: Path<TKey, TEntry>): ITreeNode | undefined {
+		if (path.leafNode.entries.length >= (NodeCapacity >>> 1)) {
 			return undefined;
 		}
 
 		const leaf = path.leafNode;
-		const parent = path.branches.at(depth - 1)!;
+		const parent = path.branches.at(-1)!;
+		const depth = path.branches.length - 1;
 		const pIndex = parent.index;
 		const pNode = parent.node;
 
@@ -598,7 +599,7 @@ export class BTree<TKey, TEntry> {
 		if (rightSib && rightSib.entries.length > (NodeCapacity >>> 1)) {   // Attempt to borrow from right sibling
 			const entry = rightSib.entries.shift()!;
 			leaf.entries.push(entry);
-			this.updatePartition(pIndex + 1, path, depth - 1, this.keyFromEntry(rightSib.entries[0]!));
+			this.updatePartition(pIndex + 1, path, depth, this.keyFromEntry(rightSib.entries[0]!));
 			return undefined;
 		}
 
@@ -606,7 +607,7 @@ export class BTree<TKey, TEntry> {
 		if (leftSib && leftSib.entries.length > (NodeCapacity >>> 1)) {   // Attempt to borrow from left sibling
 			const entry = leftSib.entries.pop()!;
 			leaf.entries.unshift(entry);
-			this.updatePartition(pIndex, path, depth - 1, this.keyFromEntry(entry));
+			this.updatePartition(pIndex, path, depth, this.keyFromEntry(entry));
 			path.leafIndex += 1;
 			return undefined;
 		}
@@ -616,9 +617,9 @@ export class BTree<TKey, TEntry> {
 			pNode.partitions.splice(pIndex, 1);
 			pNode.nodes.splice(pIndex + 1, 1);
 			if (pIndex === 0) { // 0th node of parent, update parent key
-				this.updatePartition(pIndex, path, depth - 1, this.keyFromEntry(leaf.entries[0]!));
+				this.updatePartition(pIndex, path, depth, this.keyFromEntry(leaf.entries[0]!));
 			}
-			return this.rebalanceBranch(path, depth - 1);
+			return this.rebalanceBranch(path, depth);
 		}
 
 		if (leftSib && leftSib.entries.length + leaf.entries.length <= NodeCapacity) {  // Attempt to merge into left sibling (leaf deleted)
@@ -627,7 +628,7 @@ export class BTree<TKey, TEntry> {
 			leftSib.entries.push(...leaf.entries);
 			pNode.partitions.splice(pIndex - 1, 1);
 			pNode.nodes.splice(pIndex, 1);
-			return this.rebalanceBranch(path, depth - 1);
+			return this.rebalanceBranch(path, depth);
 		}
 	}
 
