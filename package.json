@@ -1,18 +1,20 @@
 {
   "name": "digitree",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "description": "Lightweight B+Tree implementation in TypeScript",
   "type": "module",
   "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js"
   },
+  "packageManager": "yarn@4.12.0",
   "scripts": {
-    "clean": "rm -rf dist/",
+    "clean": "rimraf dist/",
     "doc": "npx typedoc -out docs src",
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "test": "node --loader=ts-node/esm node_modules/mocha/bin/mocha.js test/**/*.test.ts --colors",
-    "prepublish": "npm run build && npm run doc"
+    "prepublish": "yarn clean && npm run build && npm run doc",
+    "pub": "npx bumpp --no-push --no-commit --no-tag --no-git-check -y && yarn npm publish --access public"
   },
   "repository": {
     "type": "git",
@@ -33,22 +35,19 @@
     "dictionary"
   ],
   "author": "Nathan T. Allan",
-  "license": "Apache-2.0"
-	,
+  "license": "Apache-2.0",
   "devDependencies": {
     "@types/chai": "^5.2.2",
     "@types/mocha": "^10.0.10",
-    "chai": "^5.2.0",
-    "mocha": "^11.4.0",
-
     "@typescript-eslint/eslint-plugin": "^8.32.1",
     "@typescript-eslint/parser": "^8.32.1",
+    "bumpp": "^10.4.0",
+    "chai": "^5.2.0",
     "eslint": "^9.27.0",
-
-		"typedoc": "^0.28.4",
-
-		"ts-node": "^10.9.2",
-
-		"typescript": "^5.8.3"
+    "mocha": "^11.4.0",
+    "rimraf": "^6.0.1",
+    "ts-node": "^10.9.2",
+    "typedoc": "^0.28.4",
+    "typescript": "^5.8.3"
   }
 }

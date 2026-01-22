@@ -639,7 +639,7 @@ export class BTree<TKey, TEntry> {
 			return path.branches[depth + 1]?.node ?? path.leafNode;
 		}
 
-		if (depth === 0 || (branch.nodes.length >= NodeCapacity << 1)) {
+		if (depth === 0 || (branch.nodes.length >= NodeCapacity >>> 1)) {
 			return undefined;
 		}
 
