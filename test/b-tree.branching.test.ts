@@ -93,6 +93,66 @@ describe('Branching BTree', () => {
 		expect((tree as any)["_root"] instanceof LeafNode).to.be.true;
 	});
 
+	it('should not corrupt tree when deleting index 0 causes leaf to become empty (bug #1)', () => {
+		// Bug: internalDelete accessed entries[0] after deletion even when leaf became empty
+		// This happens when:
+		// 1. leaf is not root (has branches)
+		// 2. we delete entry at leafIndex === 0
+		// 3. leaf becomes empty after deletion
+		// 4. the leaf's branch index > 0 (so updatePartition actually writes to partitions array)
+		// The bug causes undefined to be stored as a partition key, corrupting the tree
+		
+		// Setup: Create a tree with 3 leaves where the MIDDLE leaf has only 1 entry
+		// [left leaf] [middle leaf with 1 entry] [right leaf]
+		// Partitions: [middleKey, rightKey]
+		// The middle leaf is at branch index 1, so updatePartition will write partitions[0]
+		
+		const halfCap = NodeCapacity / 2;	// 32
+		
+		const leftLeaf = new LeafNode([...Array(halfCap).keys()]);	// [0..31]
+		const middleLeaf = new LeafNode([50]);	// Single entry - will be deleted
+		const rightLeaf = new LeafNode([...Array(halfCap).keys()].map(i => i + 100));	// [100..131]
+		const rootBranch = new BranchNode<number>([50, 100], [leftLeaf, middleLeaf, rightLeaf]);
+		(tree as any)['_root'] = rootBranch;
+		
+		// Verify setup
+		expect(tree.getCount()).to.equal(halfCap * 2 + 1);
+		expect(tree.find(50).on).to.be.true;
+		
+		// Find the middle entry - it should be at leafIndex 0 with branch index 1
+		const path = tree.find(50);
+		expect(path.leafIndex).to.equal(0);
+		expect(path.branches.length).to.equal(1);
+		expect(path.branches[0].index).to.equal(1);	// Middle leaf is at index 1
+		
+		// Delete the only entry in the middle leaf
+		// Before the fix: this calls updatePartition with keyFromEntry(entries[0]) 
+		// where entries is now empty, storing undefined as partitions[0]
+		const deleted = tree.deleteAt(path);
+		expect(deleted).to.be.true;
+		
+		// Verify tree is not corrupted - all partition keys should be valid numbers
+		// After rebalancing the tree structure changes, but we should never have undefined partitions
+		function checkPartitions(node: any) {
+			if (node.partitions) {
+				for (const partition of node.partitions) {
+					expect(partition, 'Partition should not be undefined').to.not.be.undefined;
+					expect(typeof partition, 'Partition should be a number').to.equal('number');
+				}
+				for (const child of node.nodes) {
+					checkPartitions(child);
+				}
+			}
+		}
+		checkPartitions((tree as any)['_root']);
+		
+		// Tree should still be valid and navigable
+		expect(tree.find(50).on).to.be.false;
+		expect(tree.find(0).on).to.be.true;
+		expect(tree.find(100).on).to.be.true;
+		expect(tree.getCount()).to.equal(halfCap * 2);
+	});
+
 	it('build a large tree - right', () => {
 		const count = NodeCapacity * NodeCapacity + 1;
 		addRange(0, count);

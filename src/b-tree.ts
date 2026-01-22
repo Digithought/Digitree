@@ -66,7 +66,8 @@ export class BTree<TKey, TEntry> {
 		const endPath = range.last
 			? this.findLast(range)
 			: (range.isAscending ? this.last() : this.first());
-		const endKey = this.keyFromEntry(endPath.leafNode.entries[endPath.leafIndex]);
+		// Only compute endKey if endPath is on an entry; otherwise the loop will exit early anyway
+		const endKey = endPath.on ? this.keyFromEntry(endPath.leafNode.entries[endPath.leafIndex]) : undefined;
 		const iterable = range.isAscending
 			? this.internalAscending(startPath)
 			: this.internalDescending(startPath);
@@ -74,7 +75,7 @@ export class BTree<TKey, TEntry> {
 		for (let path of iterable) {
 			if (!path.on || !endPath.on || this.compareKeys(
 				this.keyFromEntry(path.leafNode.entries[path.leafIndex]),
-				endKey
+				endKey!
 			) * ascendingFactor > 0) {
 				break;
 			}
@@ -145,9 +146,7 @@ export class BTree<TKey, TEntry> {
 		const path = this.find(newKey);
 		if (path.on) {
 			const result = this.updateAt(path, getUpdated(path.leafNode.entries[path.leafIndex]));	// Don't use internalUpdate - need to freeze and check for mutation
-			if (result[0].on) {
-				result[0].version = ++this._version;
-			}
+			// Note: updateAt already increments version, so don't double-increment here
 			return result;
 		} else {
 			this.internalInsertAt(path, Object.freeze(newEntry));
@@ -432,7 +431,7 @@ export class BTree<TKey, TEntry> {
 		if (path.on) {
 			path.leafNode.entries.splice(path.leafIndex, 1);
 			if (path.branches.length > 0) {   // Only worry about underflows, balancing, etc. if not root
-				if (path.leafIndex === 0) { // If we deleted index 0, update branches with new key
+				if (path.leafIndex === 0 && path.leafNode.entries.length > 0) { // If we deleted index 0 and leaf is not empty, update branches with new key
 					const pathBranch = path.branches.at(-1)!;
 					this.updatePartition(pathBranch.index, path, path.branches.length - 1, this.keyFromEntry(path.leafNode.entries[path.leafIndex]));
 				}
