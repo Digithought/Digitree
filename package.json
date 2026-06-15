@@ -1,6 +1,6 @@
 {
   "name": "digitree",
-  "version": "1.4.6",
+  "version": "1.4.8",
   "description": "Lightweight B+Tree implementation in TypeScript",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,7 +15,8 @@
     "test": "node --loader=ts-node/esm node_modules/mocha/bin/mocha.js test/**/*.test.ts --colors",
     "test:coverage": "c8 node --loader=ts-node/esm node_modules/mocha/bin/mocha.js test/**/*.test.ts --colors --timeout 0",
     "prepublish": "yarn clean && npm run build && npm run doc",
-    "pub": "npx bumpp --no-push --no-commit --no-tag --no-git-check -y && yarn npm publish --access public"
+    "pub": "npx bumpp --no-push --no-commit --no-tag --no-git-check -y && yarn npm publish --access public",
+    "release": "node scripts/release.mjs"
   },
   "repository": {
     "type": "git",
