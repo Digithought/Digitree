@@ -1,12 +1,19 @@
 import { expect } from 'chai';
 import { KeyBound, KeyRange, NodeCapacity, BTree } from '../src/index.js';
 import { BranchNode, LeafNode } from '../src/nodes.js';
+import { assertTreeInvariants } from './helpers/invariants.js';
+import { lcg, shuffle } from './helpers/rng.js';
 
 describe('Branching BTree', () => {
 	let tree: BTree<number, number>;
+	// Seeded RNG so any structural failure surfaced by assertTreeInvariants is reproducible. Reset per
+	// test (beforeEach) so each test sees the same deterministic sequence.
+	const SEED = 0x5eed1234;
+	let rng: () => number;
 
 	beforeEach(() => {
 		tree = new BTree<number, number>();
+		rng = lcg(SEED);
 	});
 
 	it('should grow to multiple branches right', () => {
@@ -254,11 +261,14 @@ describe('Branching BTree', () => {
 
 	it('build a large tree - randomly', () => {
 		const count = NodeCapacity * NodeCapacity + 1;
-		addRandom(0, count - 1);
+		const checkInterval = 256;	// sample structural invariants periodically (not every op)
+		addRandom(0, count - 1, checkInterval);
+		assertTreeInvariants(tree);
 		expectRange(0, count);
 		expect(tree.getCount()).to.equal(count);
 		// Gut randomly
-		deleteRandom(0, count - 1);
+		deleteRandom(0, count - 1, checkInterval);
+		assertTreeInvariants(tree);
 		expect(tree.getCount()).to.equal(0);
 	});
 
@@ -272,19 +282,26 @@ describe('Branching BTree', () => {
 		const count = NodeCapacity * NodeCapacity * NodeCapacity * 4;	// ~ 1 million
 		const randomStart = performance.now();
 		for (let i = 0; i !== count; ++i) {
-			Math.random();
+			rng();
 		}
 		const randomTime = performance.now() - randomStart;
 		const insertStart = performance.now();
 		for (let i = 0; i !== count; ++i) {
-			tree.insert(Math.random());
+			tree.insert(rng());
 		}
 		const insertTime = performance.now() - insertStart;
 		console.log(`Random: ${randomTime}ms, Insert: ${insertTime}ms, Net: ${insertTime - randomTime}ms`);
 		expect(tree.getCount()).to.be.closeTo(count, 2);
-		// Gut randomly
+		// One full structural check on the freshly-built ~1M-entry (4-level) tree. This is the only deep-tree
+		// validation in the suite and it passes - the build path is sound.
+		assertTreeInvariants(tree);
+		// NOTE: invariant sampling is deliberately NOT run during the gut below. Random deletion of a 4-level
+		// tree triggers a pre-existing tree-integrity bug in the delete/rebalance path (a borrow/merge leaves a
+		// stale branch partition, so find() mis-routes for keys that are still present). The seeded validator
+		// surfaces it deterministically; see tickets/.pre-existing-error.md and the delete-integrity regression
+		// test. Re-enable sampling here once that bug is fixed.
 		while (tree.first().on) {
-			const path = tree.find(Math.random());
+			const path = tree.find(rng());
 			if (!path.on) {
 				tree.moveNext(path);
 			}
@@ -294,7 +311,7 @@ describe('Branching BTree', () => {
 			tree.deleteAt(path);
 		}
 		expect(tree.getCount()).to.equal(0);
-	}).timeout(10000);
+	}).timeout(15000);
 
 	it('getCount should give the correct number, whether ascending or descending, with a starting path, or not', () => {
 		const count = NodeCapacity * NodeCapacity + 1;
@@ -331,10 +348,11 @@ describe('Branching BTree', () => {
 		}
 	}
 
-	function addRandom(start: number, end: number) {
+	function addRandom(start: number, end: number, checkInterval = 0) {
 		const range = [...Array(end - start + 1).keys()];
+		let ops = 0;
 		while (range.length) {
-			const index = Math.floor(Math.random() * range.length);
+			const index = Math.floor(rng() * range.length);
 			const value = range.splice(index, 1)[0];
 			const path = tree.insert(value);
 			if (!path.on) {
@@ -342,6 +360,9 @@ describe('Branching BTree', () => {
 			}
 			if (tree.at(path) !== value) {
 				throw new Error(`Path not maintained: Expected ${value} but got ${tree.at(path)}`);
+			}
+			if (checkInterval && (++ops % checkInterval === 0)) {
+				assertTreeInvariants(tree);
 			}
 		}
 	}
@@ -355,12 +376,16 @@ describe('Branching BTree', () => {
 		}
 	}
 
-	function deleteRandom(start: number, end: number) {
+	function deleteRandom(start: number, end: number, checkInterval = 0) {
 		const range = [...Array(end - start + 1).keys()];
+		let ops = 0;
 		while (range.length) {
-			const index = Math.floor(Math.random() * range.length);
+			const index = Math.floor(rng() * range.length);
 			if (!tree.deleteAt(tree.find(range.splice(index, 1)[0]))) {
 				throw new Error("Failed to delete " + index);
+			}
+			if (checkInterval && (++ops % checkInterval === 0)) {
+				assertTreeInvariants(tree);
 			}
 		}
 	}
@@ -375,14 +400,9 @@ describe('Branching BTree', () => {
 		expect(i).to.equal(starting + count);
 	}
 
-	// Helper function to shuffle an array
+	// Seeded shuffle (Fisher–Yates) so the insert/delete order is reproducible.
 	function shuffleArray<T>(array: T[]): T[] {
-		const newArray = [...array];
-		for (let i = newArray.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			[newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-		}
-		return newArray;
+		return shuffle(array, rng);
 	}
 
 	// Helper function to validate a path to an existing key
@@ -437,9 +457,11 @@ describe('Branching BTree', () => {
 			presentKeys.add(val);
 			if (i % Math.max(1, Math.floor(N / 20)) === 0 || i === N -1 ) { // Verify all keys periodically and at the end
 				verifyAllPresentKeys(tree, presentKeys);
+				assertTreeInvariants(tree);
 			}
 		}
 		verifyAllPresentKeys(tree, presentKeys); // Final check after all insertions
+		assertTreeInvariants(tree);
 
 		// Deletion Phase
 		for (let i = 0; i < N; i++) {
@@ -456,9 +478,11 @@ describe('Branching BTree', () => {
 			presentKeys.delete(val);
 			if (i % Math.max(1, Math.floor(N / 20)) === 0 || i === N - 1) { // Verify all keys periodically and at the end
 				verifyAllPresentKeys(tree, presentKeys);
+				assertTreeInvariants(tree);
 			}
 		}
 		verifyAllPresentKeys(tree, presentKeys); // Final check after all deletions (presentKeys should be empty)
+		assertTreeInvariants(tree);
 
 		expect(presentKeys.size).to.equal(0, 'All keys should be deleted.');
 		expect(tree.getCount()).to.equal(0, 'Tree count should be 0 after all deletions.');
