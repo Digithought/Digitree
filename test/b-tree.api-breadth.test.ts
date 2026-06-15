@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { BTree, NodeCapacity } from '../src/index.js';
+import { BTree, NodeCapacity, Path } from '../src/index.js';
 import { BranchNode, ITreeNode, LeafNode } from '../src/nodes.js';
 import { assertTreeInvariants } from './helpers/invariants.js';
 import { lcg, shuffle } from './helpers/rng.js';
@@ -265,6 +265,43 @@ describe('API breadth: compareKeys consistency guard on a multi-level tree', () 
 		expect(tree.getCount()).to.equal(before - 1);
 		expect(tree.find(deep).on).to.be.false;
 	}).timeout(15000);
+});
+
+describe('API breadth: Path.isEqual', () => {
+	// isEqual compares (leafNode, leafIndex, on, version). It is public API (a Path method) but unexercised by
+	// the rest of the suite. Build a multi-leaf tree so two keys can share a leaf or land in different leaves,
+	// then drive each of the four short-circuiting comparisons to both outcomes.
+	const build = (): BTree<number, number> => {
+		const tree = new BTree<number, number>();
+		for (let i = 0; i < C * 2; i++) tree.insert(i);	// > 1 leaf, so different keys can sit in different leaves
+		return tree;
+	};
+
+	it('is true for two equal paths and reflexively for a clone', () => {
+		const tree = build();
+		expect(tree.find(0).isEqual(tree.find(0)), 'two finds of the same key').to.be.true;
+		const p = tree.find(5);
+		expect(p.isEqual(p.clone()), 'a clone equals its source').to.be.true;
+	});
+
+	it('is false when any one of leafNode / leafIndex / on / version differs', () => {
+		const tree = build();
+		const p0 = tree.find(0);
+		// leafNode differs: key 0 and the last key sit in different leaves.
+		expect(tree.find(0).isEqual(tree.find(C * 2 - 1)), 'different leaf').to.be.false;
+		// leafIndex differs (same leaf): keys 0 and 1 share the first leaf.
+		expect(tree.find(0).leafNode, 'same leaf for 0 and 1').to.equal(tree.find(1).leafNode);
+		expect(tree.find(0).isEqual(tree.find(1)), 'same leaf, different index').to.be.false;
+		// on differs (same leaf + index): the crack before key 0 sits at leafIndex 0 with on === false.
+		const crack = tree.find(-0.5);
+		expect(crack.on, 'crack before first key').to.be.false;
+		expect(crack.leafNode, 'crack shares the first leaf').to.equal(p0.leafNode);
+		expect(crack.leafIndex, 'crack at index 0').to.equal(p0.leafIndex);
+		expect(p0.isEqual(crack), 'same leaf+index, different on').to.be.false;
+		// version differs (all else equal): forge a path identical to p0 but with a bumped version.
+		const stale = new Path(p0.branches, p0.leafNode, p0.leafIndex, p0.on, p0.version + 1);
+		expect(p0.isEqual(stale), 'same leaf+index+on, different version').to.be.false;
+	});
 });
 
 describe('API breadth: duplicate-key rejection at scale', () => {

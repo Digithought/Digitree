@@ -5,6 +5,7 @@
   "exclude": ["test/**", "dist/**", "node_modules/**"],
   "extension": [".ts", ".js"],
   "reporter": ["text", "lcov"],
+  "check-coverage": true,
   "lines": 98,
   "statements": 98,
   "branches": 99,
