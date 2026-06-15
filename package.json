@@ -1,6 +1,6 @@
 {
   "name": "digitree",
-  "version": "1.4.8",
+  "version": "1.4.9",
   "description": "Lightweight B+Tree implementation in TypeScript",
   "type": "module",
   "main": "./dist/index.js",
