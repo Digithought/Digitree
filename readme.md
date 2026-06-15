@@ -128,3 +128,4 @@ Try to be sure that the enhancement isn't only associated with a particular usag
 * If using VSCode use the editorconfig plugin to honor the conventions in `.editorconfig`
 * Build: `yarn build` or `npm run build`
 * Test: `yarn test` or `npm test`
+* Coverage: `yarn test:coverage` or `npm run test:coverage` — emits a text summary and `coverage/lcov.info`

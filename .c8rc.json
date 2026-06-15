@@ -1,0 +1,12 @@
+{
+  "all": true,
+  "src": ".",
+  "include": ["src/**/*.ts"],
+  "exclude": ["test/**", "dist/**", "node_modules/**"],
+  "extension": [".ts", ".js"],
+  "reporter": ["text", "lcov"],
+  "lines": 98,
+  "statements": 98,
+  "branches": 99,
+  "functions": 97
+}

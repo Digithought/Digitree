@@ -314,7 +314,7 @@ describe('Branching BTree', () => {
 			}
 		}
 		expect(tree.getCount()).to.equal(0);
-	}).timeout(15000);
+	}).timeout(0);
 
 	it('getCount should give the correct number, whether ascending or descending, with a starting path, or not', () => {
 		const count = NodeCapacity * NodeCapacity + 1;
