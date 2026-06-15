@@ -10,7 +10,7 @@
   "packageManager": "yarn@4.12.0",
   "scripts": {
     "clean": "rimraf dist/",
-    "doc": "npx typedoc -out docs src",
+    "doc": "npx typedoc",
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "test": "node --loader=ts-node/esm node_modules/mocha/bin/mocha.js test/**/*.test.ts --colors",
     "test:coverage": "c8 node --loader=ts-node/esm node_modules/mocha/bin/mocha.js test/**/*.test.ts --colors --timeout 0",
