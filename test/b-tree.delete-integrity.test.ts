@@ -14,7 +14,7 @@ import { lcg } from './helpers/rng.js';
 // SKIPPED so `npm test` stays green. Un-skip (it.skip -> it) to drive the fix; it should pass once the
 // delete/rebalance bug is fixed.
 describe('BTree delete integrity (deep trees)', () => {
-	it.skip('random deletion of a deep tree must not corrupt branch partitions', () => {
+	it('random deletion of a deep tree must not corrupt branch partitions', () => {
 		class FastTree extends BTree<number, number> {
 			compareKeys(a: number, b: number) { return a - b; }
 		}

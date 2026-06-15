@@ -673,9 +673,9 @@ export class BTree<TKey, TEntry> {
 			branch.partitions.push(...rightSib.partitions);
 			branch.nodes.push(...rightSib.nodes);
 			pNode.nodes.splice(pIndex + 1, 1);
-			if (pIndex === 0 && pNode.partitions.length > 0) {	// if branch is left edge of parent, new right sibling is now the first partition
-				this.updatePartition(pIndex, path, depth - 1, pNode.partitions[0]);
-			}
+			// No partition update needed: merging the right sibling in keeps branch.nodes[0], so branch's
+			// subtree minimum is unchanged. (The old code wrote pNode.partitions[0] here, which is the
+			// parent's first separator - larger than branch's true min - corrupting an ancestor partition.)
 			return this.rebalanceBranch(path, depth - 1);
 		}
 

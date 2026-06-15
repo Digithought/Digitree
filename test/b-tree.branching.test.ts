@@ -295,11 +295,11 @@ describe('Branching BTree', () => {
 		// One full structural check on the freshly-built ~1M-entry (4-level) tree. This is the only deep-tree
 		// validation in the suite and it passes - the build path is sound.
 		assertTreeInvariants(tree);
-		// NOTE: invariant sampling is deliberately NOT run during the gut below. Random deletion of a 4-level
-		// tree triggers a pre-existing tree-integrity bug in the delete/rebalance path (a borrow/merge leaves a
-		// stale branch partition, so find() mis-routes for keys that are still present). The seeded validator
-		// surfaces it deterministically; see tickets/.pre-existing-error.md and the delete-integrity regression
-		// test. Re-enable sampling here once that bug is fixed.
+		// Gut randomly, sampling structural invariants periodically. This deep (4-level) gut is the suite's
+		// only deep-tree check of the delete/rebalance path; it exercises borrow/merge at depths the smaller
+		// suites never reach (see test/b-tree.delete-integrity.test.ts for the focused regression).
+		let ops = 0;
+		const sample = 20000;
 		while (tree.first().on) {
 			const path = tree.find(rng());
 			if (!path.on) {
@@ -309,6 +309,9 @@ describe('Branching BTree', () => {
 				tree.movePrior(path);
 			}
 			tree.deleteAt(path);
+			if (++ops % sample === 0) {
+				assertTreeInvariants(tree);
+			}
 		}
 		expect(tree.getCount()).to.equal(0);
 	}).timeout(15000);
