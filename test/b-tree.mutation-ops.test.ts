@@ -168,6 +168,29 @@ describe('Multi-level mutation ops (upsert / merge / updateAt)', () => {
 			assertTreeInvariants(dict);
 		});
 
+		it('relocate: getUpdated returning an absent key moves the entry (delete + insert) and reports a non-update', () => {
+			// The update branch delegates to updateAt (src/b-tree.ts merge), so a present key whose getUpdated
+			// returns a *different absent* key relocates the entry. Leaves carry spare room (MIN+4) so neither the
+			// insert nor the delete rebalances - isolating the relocation itself. The rest of the merge tests (and
+			// the random stream) only ever keep the key, so this is the sole end-to-end cover of that path.
+			const root = branchOf([leafOf(seq(0, MIN + 4)), leafOf(seq(100, MIN + 4)), leafOf(seq(200, MIN + 4))]);
+			(tree as any)['_root'] = root;
+			assertTreeInvariants(tree);
+			const before = ascendingValues(tree);
+
+			const OLD = 5, NEW = 150;	// OLD in the first leaf; NEW absent, lands in the (spare-room) middle leaf
+			const [path, wasUpdate] = tree.merge(OLD, () => NEW);
+
+			expect(wasUpdate, 'a key change through merge is reported as an insert (wasUpdate false)').to.be.false;
+			expect(path.on, 'path lands on the relocated entry').to.be.true;
+			expect(tree.at(path)).to.equal(NEW);
+			assertTreeInvariants(tree);
+			expect(root.nodes.length, 'spare room both sides -> no split, no rebalance').to.equal(3);
+			expect(tree.get(OLD), 'old key removed').to.be.undefined;
+			expect(tree.get(NEW), 'new key present').to.equal(NEW);
+			expect(ascendingValues(tree)).to.deep.equal(before.filter(k => k !== OLD).concat(NEW).sort((a, b) => a - b));
+		});
+
 		it('conflict: getUpdated returning an already-present key leaves the path off and the tree unchanged', () => {
 			const root = branchOf([leafOf(seq(0, MIN)), leafOf(seq(100, MIN)), leafOf(seq(200, MIN))]);
 			(tree as any)['_root'] = root;
