@@ -1,0 +1,5 @@
+.logs/
+.stop
+.in-progress
+.pre-existing-error.md
+.index/
